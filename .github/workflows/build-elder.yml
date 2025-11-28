@@ -1,4 +1,4 @@
-name: 完全保留文件目录-仅替换包名文本
+name: 完全保留文件目录-修复编译错误版
 on: workflow_dispatch
 jobs:
   build-release-apk:
@@ -19,9 +19,9 @@ jobs:
       - name: 生成local.properties
         run: echo "sdk.dir=/usr/local/lib/android/sdk" > local.properties
 
-      - name: 仅替换包名文本引用（目录完全不变）
+      - name: 全量替换包名（含import和类引用）
         run: |
-          # 原包名与新包名（仅替换文本）
+          # 定义完整新旧包名
           OLD_PACKAGE1="org.frknkrc44.hma_oss"
           OLD_PACKAGE2="icu.nullptr.hidemyapplist"
           NEW_PACKAGE="com.shipook.reader.mfxsdq"
@@ -31,15 +31,15 @@ jobs:
           sed -i "s/namespace = appPackageName/namespace = \"$NEW_PACKAGE\"/" app/build.gradle.kts
           sed -i "s/$OLD_PACKAGE2/$NEW_PACKAGE/g" common/build.gradle.kts
           
-          # 2. 代码文件的package声明替换（仅改文本，文件位置不变）
+          # 2. 代码文件的package声明 + import语句 + 类引用替换
           find app/src/main/java common/src/main/java -name "*.kt" | xargs sed -i "s/package $OLD_PACKAGE1/package $NEW_PACKAGE/g"
           find app/src/main/java common/src/main/java -name "*.kt" | xargs sed -i "s/package $OLD_PACKAGE2/package $NEW_PACKAGE/g"
+          find app/src/main/java common/src/main/java -name "*.kt" | xargs sed -i "s/import $OLD_PACKAGE1/import $NEW_PACKAGE/g"
+          find app/src/main/java common/src/main/java -name "*.kt" | xargs sed -i "s/import $OLD_PACKAGE2/import $NEW_PACKAGE/g"
+          find app/src/main/java common/src/main/java -name "*.kt" | xargs sed -i "s/$OLD_PACKAGE1\./$NEW_PACKAGE\./g"
+          find app/src/main/java common/src/main/java -name "*.kt" | xargs sed -i "s/$OLD_PACKAGE2\./$NEW_PACKAGE\./g"
           
-          # 3. 代码中跨文件的包名引用替换
-          find app/src/main/java common/src/main/java -name "*.kt" | xargs sed -i "s/$OLD_PACKAGE1/$NEW_PACKAGE/g"
-          find app/src/main/java common/src/main/java -name "*.kt" | xargs sed -i "s/$OLD_PACKAGE2/$NEW_PACKAGE/g"
-          
-          # 4. 应用名称替换
+          # 3. 应用名称替换
           sed -i 's/<string name="app_name" translatable="false">HMA-OSS<\/string>/<string name="app_name" translatable="false">听书神器<\/string>/' app/src/main/res/values/strings.xml
 
       - name: 构建APK
@@ -50,5 +50,5 @@ jobs:
       - name: 上传产物
         uses: actions/upload-artifact@v4
         with:
-          name: 保留所有文件目录_改包名APK
+          name: 修复编译错误_改包名APK
           path: app/build/outputs/apk/release/*.apk
