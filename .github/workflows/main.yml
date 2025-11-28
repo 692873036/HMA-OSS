@@ -1,4 +1,4 @@
-name: Main（手动构建）
+name: Main（手动构建-未签名）
 
 on:
   workflow_dispatch:
@@ -40,31 +40,8 @@ jobs:
           distribution: 'temurin'
           java-version: '21'
 
-      - name: 生成调试签名密钥（自动签名）
-        run: |
-          mkdir -p ~/.android
-          keytool -genkeypair -v \
-            -storetype PKCS12 \
-            -keyalg RSA \
-            -keysize 2048 \
-            -validity 10000 \
-            -alias androiddebugkey \
-            -storepass android \
-            -keypass android \
-            -dname "CN=Android Debug, O=Android, C=US" \
-            -keystore ~/.android/debug.keystore
-
-      - name: 配置Gradle自动签名
-        run: |
-          # 先创建.gradle目录
-          mkdir -p ~/.gradle
-          # 再创建gradle.properties文件
-          touch ~/.gradle/gradle.properties
-          # 追加签名配置
-          echo "android.injected.signing.store.file=${HOME}/.android/debug.keystore" >> ~/.gradle/gradle.properties
-          echo "android.injected.signing.store.password=android" >> ~/.gradle/gradle.properties
-          echo "android.injected.signing.key.alias=androiddebugkey" >> ~/.gradle/gradle.properties
-          echo "android.injected.signing.key.password=android" >> ~/.gradle/gradle.properties
+      - name: 创建local.properties文件
+        run: touch ${GITHUB_WORKSPACE}/local.properties
 
       - name: Cache gradle
         uses: actions/cache@v4
@@ -78,33 +55,34 @@ jobs:
       - name: Gradle prebuild
         run: ./gradlew prebuild
 
-      - name: 构建指定类型APK
+      - name: 构建未签名APK
         id: buildAll
         run: |
+          # 构建未签名的APK（添加--no-signing参数）
           if [ "${{ github.event.inputs.buildType }}" = "release" ]; then
-            ./gradlew assembleRelease
+            ./gradlew assembleRelease --no-signing
             echo "releaseName=$(ls app/build/outputs/apk/release/*.apk | awk -F '(/|.apk)' '{print $6}')" >> $GITHUB_OUTPUT
             echo "releaseFile=$(ls app/build/outputs/apk/release/*.apk)" >> $GITHUB_OUTPUT
           elif [ "${{ github.event.inputs.buildType }}" = "debug" ]; then
-            ./gradlew assembleDebug
+            ./gradlew assembleDebug --no-signing
             echo "debugName=$(ls app/build/outputs/apk/debug/*.apk | awk -F '(/|.apk)' '{print $6}')" >> $GITHUB_OUTPUT
             echo "debugFile=$(ls app/build/outputs/apk/debug/*.apk)" >> $GITHUB_OUTPUT
           else
-            ./gradlew assemble
+            ./gradlew assemble --no-signing
             echo "releaseName=$(ls app/build/outputs/apk/release/*.apk | awk -F '(/|.apk)' '{print $6}')" >> $GITHUB_OUTPUT
             echo "debugName=$(ls app/build/outputs/apk/debug/*.apk | awk -F '(/|.apk)' '{print $6}')" >> $GITHUB_OUTPUT
             echo "releaseFile=$(ls app/build/outputs/apk/release/*.apk)" >> $GITHUB_OUTPUT
             echo "debugFile=$(ls app/build/outputs/apk/debug/*.apk)" >> $GITHUB_OUTPUT
           fi
 
-      - name: 上传Release APK
+      - name: 上传Release APK（未签名）
         if: success() && (github.event.inputs.buildType == 'release' || github.event.inputs.buildType == 'all')
         uses: actions/upload-artifact@v4
         with:
           name: ${{ steps.buildAll.outputs.releaseName }}
           path: "app/build/outputs/apk/release/*.apk"
 
-      - name: 上传Debug APK
+      - name: 上传Debug APK（未签名）
         if: success() && (github.event.inputs.buildType == 'debug' || github.event.inputs.buildType == 'all')
         uses: actions/upload-artifact@v4
         with:
