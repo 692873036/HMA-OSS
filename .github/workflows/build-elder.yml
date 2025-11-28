@@ -1,4 +1,4 @@
-name: 自动构建+改包名（最终可用版）
+name: 自动构建+改包名（彻底解决local.properties）
 on:
   push:
     branches: [master]
@@ -15,13 +15,14 @@ jobs:
           ref: master
           fetch-depth: 1
 
-      - name: 生成local.properties（解决构建依赖）
+      - name: 强制生成local.properties到项目根目录
         run: |
-          echo "sdk.dir=/usr/local/lib/android/sdk" > local.properties
-          echo "localBuild=true" >> local.properties
-          echo "officialBuild=false" >> local.properties
-          echo "crowdinProjectId=" >> local.properties
-          echo "crowdinApiKey=" >> local.properties
+          # 直接指定项目根目录路径，确保文件被读取
+          echo "sdk.dir=/usr/local/lib/android/sdk" > /home/runner/work/HMA-OSS/HMA-OSS/local.properties
+          echo "localBuild=true" >> /home/runner/work/HMA-OSS/HMA-OSS/local.properties
+          echo "officialBuild=false" >> /home/runner/work/HMA-OSS/HMA-OSS/local.properties
+          echo "crowdinProjectId=" >> /home/runner/work/HMA-OSS/HMA-OSS/local.properties
+          echo "crowdinApiKey=" >> /home/runner/work/HMA-OSS/HMA-OSS/local.properties
 
       - name: 配置JDK
         uses: actions/setup-java@v4
@@ -65,5 +66,5 @@ jobs:
       - name: 上传APK
         uses: actions/upload-artifact@v4
         with:
-          name: 听书神器-最终可用版
+          name: 听书神器-彻底解决版
           path: final.apk
