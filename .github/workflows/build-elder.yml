@@ -1,4 +1,4 @@
-name: 自动构建+改包名（自动最新smali版）
+name: 自动构建+改包名（最终优化版）
 on:
   push:
     branches: [master]
@@ -29,17 +29,14 @@ jobs:
         env:
           ANDROID_HOME: /usr/local/lib/android/sdk
 
-      - name: 安装工具（自动获取最新smali）
+      - name: 安装指定版本apktool（避免旧版兼容问题）
         run: |
           sudo apt-get update
-          sudo apt-get install -y apktool zipalign jq
-          
-          # 1. 通过GitHub API获取smali最新版本号
-          LATEST_VERSION=$(curl -s "https://api.github.com/repos/JesusFreke/smali/releases/latest" | jq -r .tag_name)
-          
-          # 2. 拼接直接下载链接（避免重定向导致404）
-          wget "https://github.com/JesusFreke/smali/releases/download/$LATEST_VERSION/smali-$LATEST_VERSION.jar" -O smali.jar
-          wget "https://github.com/JesusFreke/smali/releases/download/$LATEST_VERSION/baksmali-$LATEST_VERSION.jar" -O baksmali.jar
+          # 安装最新稳定版apktool（通过官方源，避免系统默认旧版）
+          sudo apt-get install -y zipalign keytool
+          wget https://raw.githubusercontent.com/iBotPeaches/Apktool/master/scripts/linux/apktool -O /usr/local/bin/apktool
+          wget https://bitbucket.org/iBotPeaches/apktool/downloads/apktool_2.9.3.jar -O /usr/local/bin/apktool.jar
+          chmod +x /usr/local/bin/apktool /usr/local/bin/apktool.jar
 
       - name: 解包+改包名
         run: |
@@ -53,13 +50,13 @@ jobs:
 
       - name: 重打包+签名
         run: |
-          apktool b "temp_apk" -o modified.apk --force
+          apktool b "temp_apk" -o modified_unsigned.apk --force
           keytool -genkey -v -keystore temp.keystore -alias temp -storepass 123456 -keypass 123456 -dname "CN=Temp"
-          jarsigner -sigalg SHA256withRSA -digestalg SHA-256 -keystore temp.keystore -storepass 123456 modified.apk temp
-          zipalign -f 4 modified.apk final.apk
+          jarsigner -sigalg SHA256withRSA -digestalg SHA-256 -keystore temp.keystore -storepass 123456 modified_unsigned.apk temp
+          zipalign -f 4 modified_unsigned.apk final.apk
 
       - name: 上传APK
         uses: actions/upload-artifact@v4
         with:
-          name: 听书神器-自动最新版
+          name: 听书神器-最终优化版
           path: final.apk
