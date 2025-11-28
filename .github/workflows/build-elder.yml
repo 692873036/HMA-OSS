@@ -1,68 +1,42 @@
-name: 自动构建+改包名（无Crowdin依赖版）
-on:
-  push:
-    branches: [master]
-  workflow_dispatch:
+name: 直接改包名（使用指定APK链接）
+on: [workflow_dispatch]
 
 jobs:
-  build:
+  modify_apk:
     runs-on: ubuntu-latest
     steps:
-      - name: 拉取源码
-        uses: actions/checkout@v4
-        with:
-          repository: 692873036/HMA-OSS
-          ref: master
-          fetch-depth: 1
-
-      - name: 生成必要的local.properties
-        run: |
-          echo "sdk.dir=/usr/local/lib/android/sdk" > /home/runner/work/HMA-OSS/HMA-OSS/local.properties
-          echo "localBuild=true" >> /home/runner/work/HMA-OSS/HMA-OSS/local.properties
-          echo "officialBuild=false" >> /home/runner/work/HMA-OSS/HMA-OSS/local.properties
-
-      - name: 配置JDK
-        uses: actions/setup-java@v4
-        with:
-          java-version: '21'
-          distribution: 'temurin'
-          cache: gradle
-
-      - name: 构建原始APK（彻底跳过Crowdin任务）
-        run: |
-          chmod +x ./gradlew
-          # 排除所有Crowdin相关任务，避免API请求
-          ./gradlew assembleRelease --exclude-task crowdin* --no-daemon
-        env:
-          ANDROID_HOME: /usr/local/lib/android/sdk
-
-      - name: 安装指定版本apktool
+      - name: 安装必要工具
         run: |
           sudo apt-get update
-          sudo apt-get install -y zipalign keytool
-          wget https://raw.githubusercontent.com/iBotPeaches/Apktool/master/scripts/linux/apktool -O /usr/local/bin/apktool
-          wget https://bitbucket.org/iBotPeaches/apktool/downloads/apktool_2.9.3.jar -O /usr/local/bin/apktool.jar
-          chmod +x /usr/local/bin/apktool /usr/local/bin/apktool.jar
+          sudo apt-get install -y apktool zipalign keytool wget
 
-      - name: 解包+改包名
+      - name: 下载目标APK
         run: |
-          APK_PATH="app/build/outputs/apk/release/app-release.apk"
-          TEMP_DIR="temp_apk"
-          OLD_PKG="org.frknkrc44.hma_oss"
-          NEW_PKG="com.shipook.reader.mfxsdq"
-          
-          apktool d "$APK_PATH" -o "$TEMP_DIR" --force
-          find "$TEMP_DIR" -name "*.xml" -o -name "*.smali" | xargs sed -i "s/$OLD_PKG/$NEW_PKG/g"
+          # 使用你提供的链接下载APK
+          wget "https://release-assets.githubusercontent.com/github-production-release-asset/1051338971/3d9bff3d-2ee1-4bc1-8e53-b8f79855cd41?sp=r&sv=2018-11-09&sr=b&spr=https&se=2025-11-28T17%3A45%3A49Z&rscd=attachment%3B+filename%3DHMA-OSS-oss-130-release.apk&rsct=application%2Fvnd.android.package-archive&skoid=96c2d410-5711-43a1-aedd-ab1947aa7ab0&sktid=398a6654-997b-47e9-b12b-9515b896b4de&skt=2025-11-28T16%3A45%3A30Z&ske=2025-11-28T17%3A45%3A49Z&sks=b&skv=2018-11-09&sig=MdBGmtn4y%2BX0r3DTbgqfYIh0HWhBBG7W6APrteojYkY%3D&jwt=eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJpc3MiOiJnaXRodWIuY29tIiwiYXVkIjoicmVsZWFzZS1hc3NldHMuZ2l0aHVidXNlcmNvbnRlbnQuY29tIiwia2V5Ijoia2V5MSIsImV4cCI6MTc2NDM0OTIzOCwibmJmIjoxNzY0MzQ4OTM4LCJwYXRoIjoicmVsZWFzZWFzc2V0cHJvZHVjdGlvbi5ibG9iLmNvcmUud2luZG93cy5uZXQifQ.0ccIbA7YP20wrgOCjouwSEFloKn2y2UrtYvfxpZJGwE&response-content-disposition=attachment%3B%20filename%3DHMA-OSS-oss-130-release.apk&response-content-type=application%2Fvnd.android.package-archive" -O target.apk
 
-      - name: 重打包+签名
+      - name: 解包APK
+        run: apktool d target.apk -o temp_apk
+
+      - name: 修改包名
         run: |
-          apktool b "temp_apk" -o modified_unsigned.apk --force
-          keytool -genkey -v -keystore temp.keystore -alias temp -storepass 123456 -keypass 123456 -dname "CN=Temp"
-          jarsigner -sigalg SHA256withRSA -digestalg SHA-256 -keystore temp.keystore -storepass 123456 modified_unsigned.apk temp
-          zipalign -f 4 modified_unsigned.apk final.apk
+          # 替换原包名（org.frknkrc44.hma_oss）为新包名（com.shipook.reader.mfxsdq）
+          find temp_apk -name "*.xml" -o -name "*.smali" | xargs sed -i "s/org.frknkrc44.hma_oss/com.shipook.reader.mfxsdq/g"
 
-      - name: 上传APK
+      - name: 重打包APK
+        run: apktool b temp_apk -o modified_unsigned.apk
+
+      - name: 生成签名密钥并签名APK
+        run: |
+          # 生成密钥库（密码123456）
+          keytool -genkey -v -keystore temp_keystore.keystore -alias temp_alias -storepass 123456 -keypass 123456 -dname "CN=Temp, OU=Temp, O=Temp, L=Temp, S=Temp, C=CN"
+          # 签名APK
+          jarsigner -sigalg SHA256withRSA -digestalg SHA-256 -keystore temp_keystore.keystore modified_unsigned.apk temp_alias -storepass 123456
+          # 对齐APK
+          zipalign -f 4 modified_unsigned.apk final_modified.apk
+
+      - name: 上传修改后的APK
         uses: actions/upload-artifact@v4
         with:
-          name: 听书神器-无Crowdin依赖版
-          path: final.apk
+          name: 改包名后的APK
+          path: final_modified.apk
