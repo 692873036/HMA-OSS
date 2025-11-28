@@ -1,10 +1,10 @@
-name: 手动构建懒人听书大字版
+name: 手动构建听书神器
 on: workflow_dispatch
 jobs:
   build-apk:
     runs-on: ubuntu-latest
     steps:
-      - name: 拉取HMA源码
+      - name: 拉取源码
         uses: actions/checkout@v4
 
       - name: 配置JDK 21
@@ -14,22 +14,21 @@ jobs:
           distribution: 'temurin'
           cache: 'gradle'
 
-      - name: 替换包名、应用名与移除签名校验
+      - name: 替换包名、应用名（适配com.shipook.reader.mfxsdq）
         run: |
           # 1. 修改build.gradle.kts中的包名
-          sed -i 's/applicationId = ".*"/applicationId = "bubei.tingshu.elder"/' app/build.gradle.kts
+          sed -i 's/applicationId = ".*"/applicationId = "com.shipook.reader.mfxsdq"/' app/build.gradle.kts
           
-          # 2. 修改Constants.java中的包名常量
-          sed -i 's/icu.nullptr.hidemyapplist/bubei.tingshu.elder/g' app/src/main/java/icu/nullptr/hidemyapplist/Constants.java
+          # 2. 修改Constants类中的包名常量（适配实际路径）
+          if [ -f "app/src/main/java/com/shipook/reader/mfxsdq/Constants.java" ]; then
+            sed -i 's/原包名/com.shipook.reader.mfxsdq/g' app/src/main/java/com/shipook/reader/mfxsdq/Constants.java
+          fi
           
           # 3. 修改AndroidManifest.xml中的包名
-          sed -i 's/icu.nullptr.hidemyapplist/bubei.tingshu.elder/g' app/src/main/AndroidManifest.xml
+          sed -i 's/原包名/com.shipook.reader.mfxsdq/g' app/src/main/AndroidManifest.xml
           
-          # 4. 修改应用名为懒人听书大字版
-          sed -i 's/<string name="app_name">.*<\/string>/<string name="app_name">懒人听书大字版<\/string>/' app/src/main/res/values/strings.xml
-          
-          # 5. 移除签名校验（修正Utils.kt路径）
-          sed -i '/fun verifyAppSignature(path: String): Boolean {/,/}/c\fun verifyAppSignature(path: String): Boolean {\n    return true\n}' app/src/main/java/icu/nullptr/hidemyapplist/utils/Utils.kt
+          # 4. 修改应用名为听书神器
+          sed -i 's/<string name="app_name">.*<\/string>/<string name="app_name">听书神器<\/string>/' app/src/main/res/values/strings.xml
 
       - name: 授权并构建APK
         run: |
@@ -39,6 +38,6 @@ jobs:
       - name: 上传APK产物
         uses: actions/upload-artifact@v4
         with:
-          name: 懒人听书大字版APK
+          name: 听书神器APK
           path: app/build/outputs/apk/debug/*.apk
           retention-days: 30
