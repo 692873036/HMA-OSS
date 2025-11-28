@@ -1,72 +1,58 @@
-name: 听书神器-固定包名共存版（可直接运行）
+name: 听书神器-固定包名共存版
 on:
   push:
     branches: [ main ]
-  workflow_dispatch:  # 手动触发优先测试
+  workflow_dispatch:
 
 jobs:
   build-coexist-shipook:
     runs-on: ubuntu-latest
     steps:
-      - name: 拉取代码仓库
+      - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: 安装依赖（精简必要工具）
+      - name: Install dependencies
         run: |
           sudo apt-get update
           sudo apt-get install -y openjdk-17-jdk apktool zipalign keytool
 
-      - name: 核心配置（仅保留必要参数）
+      - name: Set config
         run: |
-          echo "ORIGIN_PACKAGE=com.xxx.audiobook" >> $GITHUB_ENV  # 必改：替换为听书神器原始包名
-          echo "TARGET_PACKAGE=com.shipook.reader.mfxsdq" >> $GITHUB_ENV  # 固定目标包名
-          echo "APK_INPUT=app/release/audiobook.apk" >> $GITHUB_ENV  # 必改：替换为仓库中APK实际路径
+          echo "ORIGIN_PACKAGE=com.xxx.audiobook" >> $GITHUB_ENV
+          echo "TARGET_PACKAGE=com.shipook.reader.mfxsdq" >> $GITHUB_ENV
+          echo "APK_INPUT=app/release/audiobook.apk" >> $GITHUB_ENV
           echo "TEMP_DIR=temp" >> $GITHUB_ENV
           echo "OUTPUT_DIR=output" >> $GITHUB_ENV
 
-      - name: 创建工作目录
+      - name: Create dirs
         run: mkdir -p ${{ env.TEMP_DIR }} ${{ env.OUTPUT_DIR }}
 
-      - name: 反编译APK（保留所有资源和源码，避免闪退）
-        run: apktool d ${{ env.APK_INPUT }} -o ${{ env.TEMP_DIR }}  # 移除 --no-src，完整反编译
+      - name: Decompile APK
+        run: apktool d ${{ env.APK_INPUT }} -o ${{ env.TEMP_DIR }}
 
-      - name: 完整替换包名（覆盖所有场景，无残留）
+      - name: Replace package name
         run: |
-          # 1. 替换所有文件中的包名文本
+          # Replace package text
           find ${{ env.TEMP_DIR }} -type f \( -name "*.smali" -o -name "*.xml" -o -name "AndroidManifest.xml" \) | xargs sed -i "s/${{ env.ORIGIN_PACKAGE }}/${{ env.TARGET_PACKAGE }}/g"
-          # 2. 替换smali类路径格式（L开头）
+          # Replace smali path format
           find ${{ env.TEMP_DIR }}/smali -name "*.smali" | xargs sed -i "s/L${{ env.ORIGIN_PACKAGE//./\/ }}/L${{ env.TARGET_PACKAGE//./\/ }}/g"
-          # 3. 调整smali目录结构（关键！否则找不到类）
+          # Move smali dir
           ORIGIN_PATH=$(echo ${{ env.ORIGIN_PACKAGE }} | tr '.' '/')
           TARGET_PATH=$(echo ${{ env.TARGET_PACKAGE }} | tr '.' '/')
           mv ${{ env.TEMP_DIR }}/smali/$ORIGIN_PATH ${{ env.TEMP_DIR }}/smali/$TARGET_PATH
-          # 4. 修复目录权限
+          # Fix permission
           chmod -R 755 ${{ env.TEMP_DIR }}/smali
 
-      - name: 重编译APK（完整资源+源码）
+      - name: Rebuild APK
         run: apktool b ${{ env.TEMP_DIR }} -o ${{ env.OUTPUT_DIR }}/unsigned.apk
 
-      - name: 签名APK（简化配置，确保兼容）
+      - name: Sign APK
         run: |
-          # 生成密钥库
-          keytool -genkeypair \
-            -keystore ${{ env.OUTPUT_DIR }}/sign.keystore \
-            -alias shipook \
-            -keyalg RSA \
-            -keysize 2048 \
-            -validity 3650 \
-            -storepass 123456 \
-            -keypass 123456 \
-            -dname "CN=Shipook"
-          # 签名
-          jarsigner -sigalg SHA256withRSA -digestalg SHA-256 \
-            -keystore ${{ env.OUTPUT_DIR }}/sign.keystore \
-            -storepass 123456 -keypass 123456 \
-            ${{ env.OUTPUT_DIR }}/unsigned.apk shipook
-          # Zipalign优化
+          keytool -genkeypair -keystore ${{ env.OUTPUT_DIR }}/sign.keystore -alias shipook -keyalg RSA -keysize 2048 -validity 3650 -storepass 123456 -keypass 123456 -dname "CN=Shipook"
+          jarsigner -sigalg SHA256withRSA -digestalg SHA-256 -keystore ${{ env.OUTPUT_DIR }}/sign.keystore -storepass 123456 -keypass 123456 ${{ env.OUTPUT_DIR }}/unsigned.apk shipook
           zipalign -f 4 ${{ env.OUTPUT_DIR }}/unsigned.apk ${{ env.OUTPUT_DIR }}/shipook_signed.apk
 
-      - name: 上传APK（纯英文名称，避免报错）
+      - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
           name: shipook-reader-coexist-apk
