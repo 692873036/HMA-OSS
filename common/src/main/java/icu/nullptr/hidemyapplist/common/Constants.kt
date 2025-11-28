@@ -1,13 +1,9 @@
 package icu.nullptr.hidemyapplist.common
 
-// 1. 替换BuildConfig的包名为你的新包名
-import com.shipook.reader.mfxsdq.BuildConfig
+import org.frknkrc44.hma_oss.common.BuildConfig
 
 object Constants {
-    // 2. 把const val改为val（因为引用了BuildConfig）
-    val PROVIDER_AUTHORITY = "${BuildConfig.APP_PACKAGE_NAME}.ServiceProvider"
-    
-    // 其他const val保留（都是常量值）
+    const val PROVIDER_AUTHORITY = "${BuildConfig.APP_PACKAGE_NAME}.ServiceProvider"
     const val GMS_PACKAGE_NAME = "com.google.android.gms"
     const val GSF_PACKAGE_NAME = "com.google.android.gsf"
     const val VENDING_PACKAGE_NAME = "com.android.vending"
@@ -25,6 +21,8 @@ object Constants {
     const val SETTINGS_TYPE_GLOBAL: Int = 0
     const val SETTINGS_TYPE_SYSTEM: Int = 1
     const val SETTINGS_TYPE_SECURE: Int = 2
+    // const val SETTINGS_TYPE_SSAID: Int = 3
+    // const val SETTINGS_TYPE_CONFIG: Int = 4
 
     const val FAKE_INSTALLATION_SOURCE_DISABLED = 0
     const val FAKE_INSTALLATION_SOURCE_USER = 1
