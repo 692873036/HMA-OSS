@@ -1,41 +1,41 @@
-name: 构建自定义包名听书神器
+name: Build Custom Package Audiobook Tool
 on: workflow_dispatch
 jobs:
   build-apk:
     runs-on: ubuntu-latest
     steps:
-      - name: 拉取你的仓库（692873036/HMA-OSS）master分支
+      - name: Pull your repository (692873036/HMA-OSS) master branch
         uses: actions/checkout@v4
         with:
           repository: 692873036/HMA-OSS
           ref: master
 
-      - name: 配置JDK 21环境
+      - name: Configure JDK 21 environment
         uses: actions/setup-java@v4
         with:
           java-version: '21'
           distribution: 'temurin'
           cache: 'gradle'
 
-      - name: 生成local.properties（指定Android SDK路径）
+      - name: Generate local.properties (specify Android SDK path)
         run: echo "sdk.dir=/usr/local/lib/android/sdk" > local.properties
 
-      - name: 精准修改包名与应用名称
+      - name: Precisely modify package name and app name
         run: |
-          # 将原始包名org.frknkrc44.hma_oss替换为目标包名
+          # Replace original package name with target package name
           sed -i 's/applicationId = "org.frknkrc44.hma_oss"/applicationId = "com.shipook.reader.mfxsdq"/' app/build.gradle.kts
           sed -i 's/package="org.frknkrc44.hma_oss"/package="com.shipook.reader.mfxsdq"/' app/src/main/AndroidManifest.xml
-          # 将应用名称改为“听书神器”
+          # Modify app name to "听书神器"
           sed -i 's/<string name="app_name">.*<\/string>/<string name="app_name">听书神器<\/string>/' app/src/main/res/values/strings.xml
 
-      - name: 构建Debug版本APK
+      - name: Build Debug version APK
         run: |
           chmod +x ./gradlew
           ./gradlew assembleDebug --no-daemon
 
-      - name: 上传最终构建的APK
+      - name: Upload the final built APK
         uses: actions/upload-artifact@v4
         with:
-          name: 听书神器-自定义包名
+          name: audiobook-tool-custom-package
           path: app/build/outputs/apk/debug/*.apk
           retention-days: 30
