@@ -14,23 +14,18 @@ jobs:
           distribution: 'temurin'
           cache: 'gradle'
 
-      - name: 替换包名、应用名（适配com.shipook.reader.mfxsdq）
+      - name: 修改包名与应用名称
         run: |
-          # 1. 修改build.gradle.kts中的包名
+          # 1. 修改build.gradle.kts中的包名为目标包名
           sed -i 's/applicationId = ".*"/applicationId = "com.shipook.reader.mfxsdq"/' app/build.gradle.kts
           
-          # 2. 修改Constants类中的包名常量（适配实际路径）
-          if [ -f "app/src/main/java/com/shipook/reader/mfxsdq/Constants.java" ]; then
-            sed -i 's/原包名/com.shipook.reader.mfxsdq/g' app/src/main/java/com/shipook/reader/mfxsdq/Constants.java
-          fi
-          
-          # 3. 修改AndroidManifest.xml中的包名
+          # 2. 修改AndroidManifest.xml中的包名
           sed -i 's/原包名/com.shipook.reader.mfxsdq/g' app/src/main/AndroidManifest.xml
           
-          # 4. 修改应用名为听书神器
+          # 3. 修改应用名为“听书神器”
           sed -i 's/<string name="app_name">.*<\/string>/<string name="app_name">听书神器<\/string>/' app/src/main/res/values/strings.xml
 
-      - name: 授权并构建APK
+      - name: 构建APK
         run: |
           chmod +x ./gradlew
           ./gradlew assembleDebug --no-daemon
