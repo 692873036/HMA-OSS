@@ -1,7 +1,7 @@
-name: Build Custom Package Audiobook Tool
+name: Build Release Audiobook Tool (Custom Package)
 on: workflow_dispatch
 jobs:
-  build-apk:
+  build-release-apk:
     runs-on: ubuntu-latest
     steps:
       - name: Pull your repository (692873036/HMA-OSS) master branch
@@ -20,22 +20,23 @@ jobs:
       - name: Generate local.properties (specify Android SDK path)
         run: echo "sdk.dir=/usr/local/lib/android/sdk" > local.properties
 
-      - name: Precisely modify package name and app name
+      - name: Full replace package name and app name (精准适配)
         run: |
-          # Replace original package name with target package name
-          sed -i 's/applicationId = "org.frknkrc44.hma_oss"/applicationId = "com.shipook.reader.mfxsdq"/' app/build.gradle.kts
-          sed -i 's/package="org.frknkrc44.hma_oss"/package="com.shipook.reader.mfxsdq"/' app/src/main/AndroidManifest.xml
-          # Modify app name to "听书神器"
-          sed -i 's/<string name="app_name">.*<\/string>/<string name="app_name">听书神器<\/string>/' app/src/main/res/values/strings.xml
+          # 替换核心包名变量
+          sed -i 's/val appPackageName by extra("org.frknkrc44.hma_oss")/val appPackageName by extra("com.shipook.reader.mfxsdq")/' build.gradle.kts
+          # 全局替换所有包名引用
+          find . -type f \( -name "*.kt" -o -name "*.java" -o -name "*.xml" -o -name "*.gradle" -o -name "*.gradle.kts" \) | xargs sed -i 's/org.frknkrc44.hma_oss/com.shipook.reader.mfxsdq/g'
+          # 替换应用名称
+          sed -i 's/<string name="app_name" translatable="false">HMA-OSS<\/string>/<string name="app_name" translatable="false">听书神器<\/string>/' app/src/main/res/values/strings.xml
 
-      - name: Build Debug version APK
+      - name: Build Release正式版 APK (含混淆、压缩)
         run: |
           chmod +x ./gradlew
-          ./gradlew assembleDebug --no-daemon
+          ./gradlew assembleRelease --no-daemon
 
-      - name: Upload the final built APK
+      - name: Upload Release APK (纯英文命名)
         uses: actions/upload-artifact@v4
         with:
-          name: audiobook-tool-custom-package
-          path: app/build/outputs/apk/debug/*.apk
+          name: hma
+          path: app/build/outputs/apk/release/*.apk
           retention-days: 30
