@@ -1,7 +1,7 @@
-name: 最小变动改包名（语法修正版）
+name: 直接改APK包名（无代码修改）
 on: workflow_dispatch
 jobs:
-  build-release-apk:
+  build-and-rename-apk:
     runs-on: ubuntu-latest
     steps:
       - name: 拉取代码
@@ -19,31 +19,38 @@ jobs:
       - name: 生成local.properties
         run: echo "sdk.dir=/usr/local/lib/android/sdk" > local.properties
 
-      - name: 核心配置（语法修正）
-        run: |
-          OLD="org.frknkrc44.hma_oss"
-          NEW="com.shipook.reader.mfxsdq"
-          
-          # 1. 改实际包名
-          sed -i "s/namespace = .*/namespace = \"$NEW\"/" app/build.gradle.kts
-          sed -i "s/namespace = .*/namespace = \"$NEW\"/" common/build.gradle.kts
-          sed -i "s/namespace = .*/namespace = \"$NEW\"/" xposed/build.gradle.kts
-          
-          # 2. 加编译映射（标准Kotlin DSL写法）
-          sed -i "/android {/a \    sourceSets {\n        main {\n            java {\n                rename(\"$OLD\", \"$NEW\")\n            }\n        }\n    }" app/build.gradle.kts
-          sed -i "/android {/a \    sourceSets {\n        main {\n            java {\n                rename(\"icu/nullptr/hidemyapplist\", \"$NEW\")\n            }\n        }\n    }" common/build.gradle.kts
-          
-          # 3. 改资源文件
-          find . -name "AndroidManifest.xml" -exec sed -i "s/package=\"$OLD\"/package=\"$NEW\"/g" {} \;
-          sed -i 's/HMA-OSS/听书神器/g' app/src/main/res/values/strings.xml
-
-      - name: 构建APK
+      - name: 构建原始APK
         run: |
           chmod +x ./gradlew
-          ./gradlew clean assembleRelease --no-daemon
+          ./gradlew assembleRelease --no-daemon
 
-      - name: 上传产物
+      - name: 安装apktool（用于改包名）
+        run: sudo apt-get install -y apktool
+
+      - name: 解包APK并改包名
+        run: |
+          # 原始APK路径
+          APK_PATH="app/build/outputs/apk/release/app-release.apk"
+          # 新包名
+          NEW_PACKAGE="com.shipook.reader.mfxsdq"
+          # 解包
+          apktool d "$APK_PATH" -o temp_apk
+          # 修改AndroidManifest.xml的包名
+          sed -i "s/package=\".*\"/package=\"$NEW_PACKAGE\"/g" temp_apk/AndroidManifest.xml
+          # 修改应用名称
+          sed -i 's/HMA-OSS/听书神器/g' temp_apk/res/values/strings.xml
+          # 重打包
+          apktool b temp_apk -o modified_app.apk
+
+      - name: 签名APK（必须签名才能安装）
+        run: |
+          # 生成签名密钥
+          keytool -genkey -v -keystore my-release-key.keystore -alias alias_name -keyalg RSA -keysize 2048 -validity 10000 -storepass android -keypass android -dname "CN=Android Debug,O=Android,C=US"
+          # 签名APK
+          jarsigner -verbose -sigalg SHA1withRSA -digestalg SHA1 -keystore my-release-key.keystore modified_app.apk alias_name -storepass android -keypass android
+
+      - name: 上传改包名后的APK
         uses: actions/upload-artifact@v4
         with:
           name: 改包名成功APK
-          path: app/build/outputs/apk/release/*.apk
+          path: modified_app.apk
