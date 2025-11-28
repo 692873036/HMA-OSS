@@ -1,8 +1,11 @@
-name: 构建原始APK+去签名校验+改包名签名（全流程）
-on: workflow_dispatch
+name: 自动构建+去签名校验+改包名（代码推送触发）
+on:
+  push:
+    branches: [master]  # 当master分支有新提交时，自动触发
+  workflow_dispatch:  # 保留手动触发选项（可选）
 
 jobs:
-  full-process-apk:
+  auto-process-apk:
     runs-on: ubuntu-latest
     steps:
       - name: 拉取HMA-OSS源码
@@ -29,71 +32,42 @@ jobs:
         env:
           ANDROID_HOME: /usr/local/lib/android/sdk
 
-      - name: 上传原始未修改APK
-        uses: actions/upload-artifact@v4
-        with:
-          name: 原始未修改APK
-          path: app/build/outputs/apk/release/app-release.apk
-          retention-days: 30
-
-      - name: 安装依赖工具（apktool+zipalign+smali）
+      - name: 安装依赖工具
         run: |
           sudo apt-get update
           sudo apt-get install -y apktool zipalign
-          # 安装smali/baksmali（用于修改Dex代码，去除签名校验）
-          wget https://github.com/JesusFreke/smali/releases/download/v2.5.2/smali-2.5.2.jar -O smali.jar
-          wget https://github.com/JesusFreke/smali/releases/download/v2.5.2/baksmali-2.5.2.jar -O baksmali.jar
+          wget https://github.com/JesusFreke/smali/releases/download/v2.6.0/smali-2.6.0.jar -O smali.jar
+          wget https://github.com/JesusFreke/smali/releases/download/v2.6.0/baksmali-2.6.0.jar -O baksmali.jar
 
-      - name: 解包APK+去除签名校验（核心步骤）
+      - name: 解包+去签名校验+改包名
         run: |
           APK_PATH="app/build/outputs/apk/release/app-release.apk"
           TEMP_DIR="temp_apk"
           DEX_DIR="dex_process"
-          
-          # 1. 解包APK
-          apktool d "$APK_PATH" -o "$TEMP_DIR" --force
-          
-          # 2. 反编译classes.dex，查找并修改签名校验代码
-          java -jar baksmali.jar d "$TEMP_DIR/classes.dex" -o "$DEX_DIR"
-          
-          # 3. 搜索签名校验相关关键词，替换为绕过逻辑
-          # 搜索PackageManager.GET_SIGNATURES、Signature等关键代码
-          find "$DEX_DIR" -name "*.smali" -type f | xargs sed -i 's/const-string v[0-9], "GET_SIGNATURES"/const v[0-9], 0x0/g'
-          find "$DEX_DIR" -name "*.smali" -type f | xargs sed -i 's/invoke-virtual {.*, Landroid/content/pm/PackageManager;->getPackageInfo/invoke-virtual {.*, Landroid/content/pm/PackageManager;->getApplicationInfo/g'
-          
-          # 4. 重新编译Dex文件
-          java -jar smali.jar a "$DEX_DIR" -o "$TEMP_DIR/classes.dex"
-
-      - name: 改包名+应用名
-        run: |
           NEW_PACKAGE="com.shipook.reader.mfxsdq"
           NEW_APP_NAME="听书神器"
-          TEMP_DIR="temp_apk"
           
-          # 替换AndroidManifest中的包名和组件路径
+          apktool d "$APK_PATH" -o "$TEMP_DIR" --force
+          java -jar baksmali.jar d "$TEMP_DIR/classes.dex" -o "$DEX_DIR"
+          find "$DEX_DIR" -name "*.smali" -type f | xargs sed -i 's/const-string v[0-9], "GET_SIGNATURES"/const v[0-9], 0x0/g'
+          find "$DEX_DIR" -name "*.smali" -type f | xargs sed -i 's/invoke-virtual {.*, Landroid/content/pm/PackageManager;->getPackageInfo/invoke-virtual {.*, Landroid/content/pm/PackageManager;->getApplicationInfo/g'
+          java -jar smali.jar a "$DEX_DIR" -o "$TEMP_DIR/classes.dex"
+          
           sed -i "s/package=\".*\"/package=\"$NEW_PACKAGE\"/g" "$TEMP_DIR/AndroidManifest.xml"
           sed -i "s/org\.frknkrc44\.hma_oss/$NEW_PACKAGE/g" "$TEMP_DIR/AndroidManifest.xml"
-          
-          # 替换应用名称
           sed -i "s/HMA-OSS/$NEW_APP_NAME/g" "$TEMP_DIR/res/values/strings.xml"
 
-      - name: 重打包+自动签名
+      - name: 重打包+签名
         run: |
           TEMP_DIR="temp_apk"
-          
-          # 重打包为未签名APK
           apktool b "$TEMP_DIR" -o modified_unsigned.apk --force
-          
-          # 生成临时密钥并签名
           keytool -genkey -v -keystore temp.keystore -alias tempalias -keyalg RSA -keysize 2048 -validity 10000 -storepass 123456 -keypass 123456 -dname "CN=Temp,O=TempApp,C=CN"
           jarsigner -verbose -sigalg SHA256withRSA -digestalg SHA-256 -keystore temp.keystore -storepass 123456 -keypass 123456 modified_unsigned.apk tempalias
-          
-          # 优化APK（提升兼容性）
           zipalign -f 4 modified_unsigned.apk final_signed.apk
 
-      - name: 上传最终处理完成APK（去校验+改包名+签名）
+      - name: 上传最终APK
         uses: actions/upload-artifact@v4
         with:
-          name: 听书神器-去校验-改包名-已签名APK
+          name: 听书神器-自动构建APK
           path: final_signed.apk
           retention-days: 30
