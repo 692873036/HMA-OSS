@@ -1,4 +1,4 @@
-name: 原始包名构建验证
+name: 精准包名替换构建版
 on: workflow_dispatch
 jobs:
   build-release-apk:
@@ -19,7 +19,21 @@ jobs:
       - name: 生成local.properties
         run: echo "sdk.dir=/usr/local/lib/android/sdk" > local.properties
 
-      - name: 直接构建（不修改任何内容）
+      - name: 精准替换包名与应用名称
+        run: |
+          # 1. 替换根目录appPackageName
+          sed -i 's/val appPackageName by extra("org.frknkrc44.hma_oss")/val appPackageName by extra("com.shipook.reader.mfxsdq")/' build.gradle.kts
+          
+          # 2. 替换app模块的namespace
+          sed -i 's/namespace = appPackageName/namespace = "com.shipook.reader.mfxsdq"/' app/build.gradle.kts
+          
+          # 3. 替换common模块的namespace
+          sed -i 's/namespace = "icu.nullptr.hidemyapplist"/namespace = "com.shipook.reader.mfxsdq"/' common/build.gradle.kts
+          
+          # 4. 替换应用名称
+          sed -i 's/<string name="app_name" translatable="false">HMA-OSS<\/string>/<string name="app_name" translatable="false">听书神器<\/string>/' app/src/main/res/values/strings.xml
+
+      - name: 构建APK
         run: |
           chmod +x ./gradlew
           ./gradlew assembleRelease --no-daemon
@@ -27,5 +41,5 @@ jobs:
       - name: 上传产物
         uses: actions/upload-artifact@v4
         with:
-          name: hma-original
+          name: hma-modified
           path: app/build/outputs/apk/release/*.apk
