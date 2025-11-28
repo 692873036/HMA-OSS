@@ -1,4 +1,4 @@
-name: 自动构建+改包名（彻底解决local.properties）
+name: 自动构建+改包名（无Crowdin依赖版）
 on:
   push:
     branches: [master]
@@ -15,14 +15,11 @@ jobs:
           ref: master
           fetch-depth: 1
 
-      - name: 强制生成local.properties到项目根目录
+      - name: 生成必要的local.properties
         run: |
-          # 直接指定项目根目录路径，确保文件被读取
           echo "sdk.dir=/usr/local/lib/android/sdk" > /home/runner/work/HMA-OSS/HMA-OSS/local.properties
           echo "localBuild=true" >> /home/runner/work/HMA-OSS/HMA-OSS/local.properties
           echo "officialBuild=false" >> /home/runner/work/HMA-OSS/HMA-OSS/local.properties
-          echo "crowdinProjectId=" >> /home/runner/work/HMA-OSS/HMA-OSS/local.properties
-          echo "crowdinApiKey=" >> /home/runner/work/HMA-OSS/HMA-OSS/local.properties
 
       - name: 配置JDK
         uses: actions/setup-java@v4
@@ -31,10 +28,11 @@ jobs:
           distribution: 'temurin'
           cache: gradle
 
-      - name: 构建原始APK
+      - name: 构建原始APK（彻底跳过Crowdin任务）
         run: |
           chmod +x ./gradlew
-          ./gradlew assembleRelease --no-daemon
+          # 排除所有Crowdin相关任务，避免API请求
+          ./gradlew assembleRelease --exclude-task crowdin* --no-daemon
         env:
           ANDROID_HOME: /usr/local/lib/android/sdk
 
@@ -66,5 +64,5 @@ jobs:
       - name: 上传APK
         uses: actions/upload-artifact@v4
         with:
-          name: 听书神器-彻底解决版
+          name: 听书神器-无Crowdin依赖版
           path: final.apk
