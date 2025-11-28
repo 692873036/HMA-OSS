@@ -1,8 +1,8 @@
-name: 自动构建+去签名校验+改包名（代码推送触发）
+name: 自动构建+去签名校验+改包名（修复版）
 on:
   push:
-    branches: [master]  # 当master分支有新提交时，自动触发
-  workflow_dispatch:  # 保留手动触发选项（可选）
+    branches: [master]  # 代码推送自动触发
+  workflow_dispatch:  # 保留手动触发
 
 jobs:
   auto-process-apk:
@@ -32,12 +32,13 @@ jobs:
         env:
           ANDROID_HOME: /usr/local/lib/android/sdk
 
-      - name: 安装依赖工具
+      - name: 安装依赖工具（修复smali下载）
         run: |
           sudo apt-get update
           sudo apt-get install -y apktool zipalign
-          wget https://github.com/JesusFreke/smali/releases/download/v2.6.0/smali-2.6.0.jar -O smali.jar
-          wget https://github.com/JesusFreke/smali/releases/download/v2.6.0/baksmali-2.6.0.jar -O baksmali.jar
+          # 拉取最新版smali/baksmali（自动适配版本）
+          wget https://github.com/JesusFreke/smali/releases/latest/download/smali.jar -O smali.jar
+          wget https://github.com/JesusFreke/smali/releases/latest/download/baksmali.jar -O baksmali.jar
 
       - name: 解包+去签名校验+改包名
         run: |
@@ -47,27 +48,34 @@ jobs:
           NEW_PACKAGE="com.shipook.reader.mfxsdq"
           NEW_APP_NAME="听书神器"
           
+          # 解包APK
           apktool d "$APK_PATH" -o "$TEMP_DIR" --force
+          
+          # 反编译Dex，去除签名校验
           java -jar baksmali.jar d "$TEMP_DIR/classes.dex" -o "$DEX_DIR"
           find "$DEX_DIR" -name "*.smali" -type f | xargs sed -i 's/const-string v[0-9], "GET_SIGNATURES"/const v[0-9], 0x0/g'
           find "$DEX_DIR" -name "*.smali" -type f | xargs sed -i 's/invoke-virtual {.*, Landroid/content/pm/PackageManager;->getPackageInfo/invoke-virtual {.*, Landroid/content/pm/PackageManager;->getApplicationInfo/g'
           java -jar smali.jar a "$DEX_DIR" -o "$TEMP_DIR/classes.dex"
           
+          # 修改包名+应用名
           sed -i "s/package=\".*\"/package=\"$NEW_PACKAGE\"/g" "$TEMP_DIR/AndroidManifest.xml"
           sed -i "s/org\.frknkrc44\.hma_oss/$NEW_PACKAGE/g" "$TEMP_DIR/AndroidManifest.xml"
           sed -i "s/HMA-OSS/$NEW_APP_NAME/g" "$TEMP_DIR/res/values/strings.xml"
 
-      - name: 重打包+签名
+      - name: 重打包+自动签名
         run: |
           TEMP_DIR="temp_apk"
+          # 重打包未签名APK
           apktool b "$TEMP_DIR" -o modified_unsigned.apk --force
+          # 生成临时密钥并签名
           keytool -genkey -v -keystore temp.keystore -alias tempalias -keyalg RSA -keysize 2048 -validity 10000 -storepass 123456 -keypass 123456 -dname "CN=Temp,O=TempApp,C=CN"
           jarsigner -verbose -sigalg SHA256withRSA -digestalg SHA-256 -keystore temp.keystore -storepass 123456 -keypass 123456 modified_unsigned.apk tempalias
+          # 优化APK
           zipalign -f 4 modified_unsigned.apk final_signed.apk
 
-      - name: 上传最终APK
+      - name: 上传最终处理完成APK
         uses: actions/upload-artifact@v4
         with:
-          name: 听书神器-自动构建APK
+          name: 听书神器-自动构建完成APK
           path: final_signed.apk
           retention-days: 30
