@@ -1,56 +1,35 @@
-name: 自动改包名（最终可用版）
+name: 极简改包名流程
 on:
   push:
-    branches: [master]  # master分支推送时自动触发
+    branches: [master]
 
 jobs:
-  modify_apk:
+  build:
     runs-on: ubuntu-latest
     steps:
-      # 步骤1：安装工具
-      - name: 安装依赖工具
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y apktool zipalign wget
+      - name: 安装工具
+        run: sudo apt-get update && sudo apt-get install -y apktool zipalign wget
 
-      # 步骤2：配置JDK（提供keytool）
-      - name: 配置Java环境
+      - name: 配置JDK
         uses: actions/setup-java@v4
         with:
           java-version: '21'
           distribution: 'temurin'
 
-      # 步骤3：下载目标APK（使用公开链接）
-      - name: 下载待修改APK
+      - name: 下载APK
+        run: wget "https://github.com/frknkrc44/HMA-OSS/releases/download/oss-130/HMA-OSS-oss-130-release.apk" -O target.apk
+
+      - name: 改包名+签名
         run: |
-          wget "https://github.com/frknkrc44/HMA-OSS/releases/download/oss-130/HMA-OSS-oss-130-release.apk" -O target.apk
+          apktool d target.apk -o temp
+          find temp -name "*.xml" -o -name "*.smali" | xargs sed -i "s/org.frknkrc44.hma_oss/com.shipook.reader.mfxsdq/g"
+          apktool b temp -o modified.apk
+          keytool -genkey -v -keystore k.keystore -alias a -storepass 123456 -keypass 123456 -dname "CN=A"
+          jarsigner -sigalg SHA256withRSA -digestalg SHA-256 -keystore k.keystore modified.apk a -storepass 123456
+          zipalign -f 4 modified.apk final.apk
 
-      # 步骤4：解包APK
-      - name: 解包APK
-        run run: apktool d target.apk -o temp_apk
-
-      # 步骤5：修改包名
-      - name: 替换包名
-        run: |
-          find temp_apk -name "*.xml" -o -name "*.smali" | xargs sed -i "s/org.frknkrc44.hma_oss/com.shipook.reader.mfxsdq/g"
-
-      # 步骤6：重打包APK
-      - name: 重打包APK
-        run: apktool b temp_apk -o modified_unsigned.apk
-
-      # 步骤7：签名并对齐APK
-      - name: 签名APK
-        run: |
-          # 生成签名密钥
-          keytool -genkey -v -keystore sign.keystore -alias sign_alias -storepass 123456 -keypass 123456 -dname "CN=Sign, OU=Sign, O=Sign, L=Sign, S=Sign, C=CN"
-          # 签名APK
-          jarsigner -sigalg SHA256withRSA -digestalg SHA-256 -keystore sign.keystore modified_unsigned.apk sign_alias -storepass 123456
-          # 对齐APK
-          zipalign -f 4 modified_unsigned.apk final.apk
-
-      # 步骤8：上传结果
-      - name: 上传改包名后的APK
+      - name: 上传结果
         uses: actions/upload-artifact@v4
         with:
-          name: 改包名完成APK
+          name: 最终APK
           path: final.apk
