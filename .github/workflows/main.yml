@@ -43,6 +43,16 @@ jobs:
       - name: 创建local.properties文件
         run: touch ${GITHUB_WORKSPACE}/local.properties
 
+      - name: 禁用APK签名（修改构建脚本）
+        run: |
+          # 向app模块的build.gradle.kts追加禁用签名的配置
+          echo 'android {
+            signingConfigs {
+              debug { enable = false }
+              release { enable = false }
+            }
+          }' >> ${GITHUB_WORKSPACE}/app/build.gradle.kts
+
       - name: Cache gradle
         uses: actions/cache@v4
         with:
@@ -58,17 +68,17 @@ jobs:
       - name: 构建未签名APK
         id: buildAll
         run: |
-          # 构建未签名的APK（添加--no-signing参数）
+          # 移除--no-signing参数，使用普通构建命令
           if [ "${{ github.event.inputs.buildType }}" = "release" ]; then
-            ./gradlew assembleRelease --no-signing
+            ./gradlew assembleRelease
             echo "releaseName=$(ls app/build/outputs/apk/release/*.apk | awk -F '(/|.apk)' '{print $6}')" >> $GITHUB_OUTPUT
             echo "releaseFile=$(ls app/build/outputs/apk/release/*.apk)" >> $GITHUB_OUTPUT
           elif [ "${{ github.event.inputs.buildType }}" = "debug" ]; then
-            ./gradlew assembleDebug --no-signing
+            ./gradlew assembleDebug
             echo "debugName=$(ls app/build/outputs/apk/debug/*.apk | awk -F '(/|.apk)' '{print $6}')" >> $GITHUB_OUTPUT
             echo "debugFile=$(ls app/build/outputs/apk/debug/*.apk)" >> $GITHUB_OUTPUT
           else
-            ./gradlew assemble --no-signing
+            ./gradlew assemble
             echo "releaseName=$(ls app/build/outputs/apk/release/*.apk | awk -F '(/|.apk)' '{print $6}')" >> $GITHUB_OUTPUT
             echo "debugName=$(ls app/build/outputs/apk/debug/*.apk | awk -F '(/|.apk)' '{print $6}')" >> $GITHUB_OUTPUT
             echo "releaseFile=$(ls app/build/outputs/apk/release/*.apk)" >> $GITHUB_OUTPUT
