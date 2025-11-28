@@ -1,7 +1,7 @@
-name: 自动改包名（最终稳定版）
+name: 自动改包名（最终可用版）
 on:
   push:
-    branches: [master]  # master分支推送时自动执行
+    branches: [master]  # master分支推送时自动触发
 
 jobs:
   modify_apk:
@@ -13,21 +13,21 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y apktool zipalign wget
 
-      # 步骤2：配置JDK
+      # 步骤2：配置JDK（提供keytool）
       - name: 配置Java环境
         uses: actions/setup-java@v4
         with:
           java-version: '21'
           distribution: 'temurin'
 
-      # 步骤3：下载目标APK（使用新链接）
+      # 步骤3：下载目标APK（使用公开链接）
       - name: 下载待修改APK
         run: |
           wget "https://github.com/frknkrc44/HMA-OSS/releases/download/oss-130/HMA-OSS-oss-130-release.apk" -O target.apk
 
       # 步骤4：解包APK
       - name: 解包APK
-        run: apktool d target.apk -o temp_apk
+        run run: apktool d target.apk -o temp_apk
 
       # 步骤5：修改包名
       - name: 替换包名
@@ -41,8 +41,11 @@ jobs:
       # 步骤7：签名并对齐APK
       - name: 签名APK
         run: |
+          # 生成签名密钥
           keytool -genkey -v -keystore sign.keystore -alias sign_alias -storepass 123456 -keypass 123456 -dname "CN=Sign, OU=Sign, O=Sign, L=Sign, S=Sign, C=CN"
+          # 签名APK
           jarsigner -sigalg SHA256withRSA -digestalg SHA-256 -keystore sign.keystore modified_unsigned.apk sign_alias -storepass 123456
+          # 对齐APK
           zipalign -f 4 modified_unsigned.apk final.apk
 
       # 步骤8：上传结果
