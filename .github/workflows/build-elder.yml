@@ -1,18 +1,25 @@
-name: 直接改包名（使用指定APK链接）
-on: [workflow_dispatch]
+name: 自动改包名（代码推送时触发）
+on:
+  push:
+    branches: [master]  # master分支推送代码时自动触发
 
 jobs:
   modify_apk:
     runs-on: ubuntu-latest
     steps:
-      - name: 安装必要工具
+      - name: 安装必要工具（不含keytool，JDK已自带）
         run: |
           sudo apt-get update
-          sudo apt-get install -y apktool zipalign keytool wget
+          sudo apt-get install -y apktool zipalign wget
+
+      - name: 配置JDK（提供keytool）
+        uses: actions/setup-java@v4
+        with:
+          java-version: '21'
+          distribution: 'temurin'
 
       - name: 下载目标APK
         run: |
-          # 使用你提供的链接下载APK
           wget "https://release-assets.githubusercontent.com/github-production-release-asset/1051338971/3d9bff3d-2ee1-4bc1-8e53-b8f79855cd41?sp=r&sv=2018-11-09&sr=b&spr=https&se=2025-11-28T17%3A45%3A49Z&rscd=attachment%3B+filename%3DHMA-OSS-oss-130-release.apk&rsct=application%2Fvnd.android.package-archive&skoid=96c2d410-5711-43a1-aedd-ab1947aa7ab0&sktid=398a6654-997b-47e9-b12b-9515b896b4de&skt=2025-11-28T16%3A45%3A30Z&ske=2025-11-28T17%3A45%3A49Z&sks=b&skv=2018-11-09&sig=MdBGmtn4y%2BX0r3DTbgqfYIh0HWhBBG7W6APrteojYkY%3D&jwt=eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJpc3MiOiJnaXRodWIuY29tIiwiYXVkIjoicmVsZWFzZS1hc3NldHMuZ2l0aHVidXNlcmNvbnRlbnQuY29tIiwia2V5Ijoia2V5MSIsImV4cCI6MTc2NDM0OTIzOCwibmJmIjoxNzY0MzQ4OTM4LCJwYXRoIjoicmVsZWFzZWFzc2V0cHJvZHVjdGlvbi5ibG9iLmNvcmUud2luZG93cy5uZXQifQ.0ccIbA7YP20wrgOCjouwSEFloKn2y2UrtYvfxpZJGwE&response-content-disposition=attachment%3B%20filename%3DHMA-OSS-oss-130-release.apk&response-content-type=application%2Fvnd.android.package-archive" -O target.apk
 
       - name: 解包APK
@@ -20,7 +27,6 @@ jobs:
 
       - name: 修改包名
         run: |
-          # 替换原包名（org.frknkrc44.hma_oss）为新包名（com.shipook.reader.mfxsdq）
           find temp_apk -name "*.xml" -o -name "*.smali" | xargs sed -i "s/org.frknkrc44.hma_oss/com.shipook.reader.mfxsdq/g"
 
       - name: 重打包APK
@@ -28,7 +34,7 @@ jobs:
 
       - name: 生成签名密钥并签名APK
         run: |
-          # 生成密钥库（密码123456）
+          # 使用JDK内置的keytool生成密钥库
           keytool -genkey -v -keystore temp_keystore.keystore -alias temp_alias -storepass 123456 -keypass 123456 -dname "CN=Temp, OU=Temp, O=Temp, L=Temp, S=Temp, C=CN"
           # 签名APK
           jarsigner -sigalg SHA256withRSA -digestalg SHA-256 -keystore temp_keystore.keystore modified_unsigned.apk temp_alias -storepass 123456
