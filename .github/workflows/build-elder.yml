@@ -1,20 +1,23 @@
-- name: 改包名+签名（兼容高版本资源）
-  run: |
-    # 升级APKTool
-    wget https://bitbucket.org/iBotPeaches/apktool/downloads/apktool_2.10.0.jar -O /usr/local/bin/apktool.jar
-    echo -e '#!/bin/bash\njava -jar /usr/local/bin/apktool.jar "$@"' > /usr/local/bin/apktool
-    chmod +x /usr/local/bin/apktool
-
-    # 解包（跳过资源）
-    apktool d target.apk -o temp --no-res
-    
-    # 替换包名
-    find temp -type f \( -name "*.smali" -o -name "AndroidManifest.xml" \) | xargs sed -i "s/org\.frknkrc44\.hma_oss/com\.shipook\.reader\.mfxsdq/g; s/Lorg\/frknkrc44\/hma_oss/Lcom\/shipook\/reader\/mfxsdq/g"
-    
-    # 重打包（跳过资源）
-    apktool b temp -o modified.apk --no-res
-    
-    # 签名对齐
-    keytool -genkey -v -keystore k.keystore -alias a -storepass 123456 -keypass 123456 -dname "CN=A"
-    jarsigner -sigalg SHA256withRSA -digestalg SHA-256 -keystore k.keystore modified.apk a -storepass 123456
-    zipalign -f 4 modified.apk final.apk
+name: 改包名流程
+on: [push]
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - run: sudo apt-get update && sudo apt-get install -y apktool zipalign wget
+      - uses: actions/setup-java@v4
+        with:
+          java-version: '21'
+          distribution: 'temurin'
+      - run: wget "https://github.com/frknkrc44/HMA-OSS/releases/download/oss-130/HMA-OSS-oss-130-release.apk" -O t.apk
+      - run: |
+          apktool d t.apk -o temp --no-res
+          find temp -type f \( -name "*.smali" -o -name "AndroidManifest.xml" \) | xargs sed -i "s/org\.frknkrc44\.hma_oss/com\.shipook\.reader\.mfxsdq/g; s/Lorg\/frknkrc44\/hma_oss/Lcom\/shipook\/reader\/mfxsdq/g"
+          apktool b temp -o m.apk --no-res
+          keytool -genkey -v -keystore k.keystore -alias a -storepass 123456 -keypass 123456 -dname "CN=A"
+          jarsigner -sigalg SHA256withRSA -digestalg SHA-256 -keystore k.keystore m.apk a -storepass 123456
+          zipalign -f 4 m.apk f.apk
+      - uses: actions/upload-artifact@v4
+        with:
+          name: 结果APK
+          path: f.apk
