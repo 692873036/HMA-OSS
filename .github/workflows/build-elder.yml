@@ -1,4 +1,4 @@
-name: 保持文件夹结构-包名替换
+name: 全模块自动替换-包名替换
 on: workflow_dispatch
 jobs:
   build-release-apk:
@@ -19,35 +19,46 @@ jobs:
       - name: 生成local.properties
         run: echo "sdk.dir=/usr/local/lib/android/sdk" > local.properties
 
-      - name: 仅替换引用和配置（保持package和文件夹不变）
+      - name: 全模块自动替换引用（含xposed）
         run: |
           OLD1="org.frknkrc44.hma_oss"
           OLD2="icu/nullptr/hidemyapplist"
           NEW="com.shipook.reader.mfxsdq"
           
-          # 1. 配置文件（只改namespace，保持代码package不变）
+          # 1. 配置文件（修改实际包名namespace）
           sed -i "s/namespace = .*/namespace = \"$NEW\"/" app/build.gradle.kts
           sed -i "s/namespace = .*/namespace = \"$NEW\"/" common/build.gradle.kts
+          sed -i "s/namespace = .*/namespace = \"$NEW\"/" xposed/build.gradle.kts
           
-          # 2. 代码文件：仅替换跨模块引用（不修改package声明）
-          find app/src/main/java common/src/main/java -name "*.kt" -exec sed -i "s/import $OLD1/import $NEW/g" {} \;
-          find app/src/main/java common/src/main/java -name "*.kt" -exec sed -i "s/import $OLD2/import $NEW/g" {} \;
-          find app/src/main/java common/src/main/java -name "*.kt" -exec sed -i "s/$OLD1\./$NEW\./g" {} \;
-          find app/src/main/java common/src/main/java -name "*.kt" -exec sed -i "s/$OLD2\./$NEW\./g" {} \;
+          # 2. 代码文件：替换app模块引用
+          find app/src/main/java -name "*.kt" -exec sed -i "s/import $OLD1/import $NEW/g" {} \;
+          find app/src/main/java -name "*.kt" -exec sed -i "s/import $OLD2/import $NEW/g" {} \;
+          find app/src/main/java -name "*.kt" -exec sed -i "s/$OLD1\./$NEW\./g" {} \;
+          find app/src/main/java -name "*.kt" -exec sed -i "s/$OLD2\./$NEW\./g" {} \;
           
-          # 3. BuildConfig修复
+          # 3. 代码文件：替换common模块引用
+          find common/src/main/java -name "*.kt" -exec sed -i "s/import $OLD1/import $NEW/g" {} \;
+          find common/src/main/java -name "*.kt" -exec sed -i "s/import $OLD2/import $NEW/g" {} \;
+          find common/src/main/java -name "*.kt" -exec sed -i "s/$OLD1\./$NEW\./g" {} \;
+          find common/src/main/java -name "*.kt" -exec sed -i "s/$OLD2\./$NEW\./g" {} \;
+          
+          # 4. 代码文件：替换xposed模块引用（新增）
+          find xposed/src/main/java -name "*.kt" -exec sed -i "s/import $OLD1/import $NEW/g" {} \;
+          find xposed/src/main/java -name "*.kt" -exec sed -i "s/import $OLD2/import $NEW/g" {} \;
+          find xposed/src/main/java -name "*.kt" -exec sed -i "s/$OLD1\./$NEW\./g" {} \;
+          find xposed/src/main/java -name "*.kt" -exec sed -i "s/$OLD2\./$NEW\./g" {} \;
+          
+          # 5. BuildConfig修复
           find common/src/main/java -name "JsonConfig.kt" -exec sed -i "s/import .*BuildConfig/import $NEW.BuildConfig/g" {} \;
-          # 新增：修复Constants.kt的const问题
-          find common/src/main/java -name "Constants.kt" -exec sed -i "s/const val PROVIDER_AUTHORITY/val PROVIDER_AUTHORITY/g" {} \;
           
-          # 4. 资源文件
-          find app/src common/src/main -name "*.xml" -exec sed -i "s/$OLD1/$NEW/g" {} \;
-          find app/src common/src/main -name "AndroidManifest.xml" -exec sed -i "s/package=\"$OLD1\"/package=\"$NEW\"/g" {} \;
+          # 6. 资源文件
+          find app/src common/src/main xposed/src/main -name "*.xml" -exec sed -i "s/$OLD1/$NEW/g" {} \;
+          find app/src common/src/main xposed/src/main -name "AndroidManifest.xml" -exec sed -i "s/package=\"$OLD1\"/package=\"$NEW\"/g" {} \;
           
-          # 5. 应用名称
+          # 7. 应用名称
           sed -i 's/HMA-OSS/听书神器/g' app/src/main/res/values/strings.xml
 
-      - name: 构建APK（加clean清除缓存）
+      - name: 构建APK（清除缓存）
         run: |
           chmod +x ./gradlew
           ./gradlew clean assembleRelease --no-daemon
