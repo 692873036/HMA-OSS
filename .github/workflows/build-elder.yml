@@ -1,4 +1,4 @@
-name: 一键修改包名 (修复common模块版)
+name: 一键修改包名 (最终彻底修复版)
 on: workflow_dispatch
 jobs:
   build-release-apk:
@@ -20,25 +20,26 @@ jobs:
       - name: 生成local.properties
         run: echo "sdk.dir=/usr/local/lib/android/sdk" > local.properties
 
-      - name: 全量替换包名（覆盖所有模块）
+      - name: 全量替换包名（正确处理硬编码引用）
         run: |
           # 1. 替换根目录appPackageName
           sed -i 's/val appPackageName by extra("org.frknkrc44.hma_oss")/val appPackageName by extra("com.shipook.reader.mfxsdq")/' build.gradle.kts
           
-          # 2. 替换app模块配置
+          # 2. 替换各模块namespace
           sed -i 's/namespace = appPackageName/namespace = "com.shipook.reader.mfxsdq"/' app/build.gradle.kts
-          
-          # 3. 替换common模块配置
           sed -i 's/namespace = "icu.nullptr.hidemyapplist"/namespace = "com.shipook.reader.mfxsdq"/' common/build.gradle.kts
           
-          # 4. 替换app模块Kotlin代码（包声明+导入）
-          find app/src/main/java -name "*.kt" | xargs sed -i 's/package org.frknkrc44.hma_oss/package com.shipook.reader.mfxsdq/g'
-          find app/src/main/java -name "*.kt" | xargs sed -i 's/import org.frknkrc44.hma_oss/import com.shipook.reader.mfxsdq/g'
+          # 3. 替换所有Kotlin文件的包声明
+          find app/src/main/java common/src/main/java -name "*.kt" | xargs sed -i 's/package org.frknkrc44.hma_oss/package com.shipook.reader.mfxsdq/g'
+          find app/src/main/java common/src/main/java -name "*.kt" | xargs sed -i 's/package icu.nullptr.hidemyapplist/package com.shipook.reader.mfxsdq/g'
           
-          # 5. 替换common模块Kotlin代码（包声明+硬编码引用）
-          find common/src/main/java -name "*.kt" | xargs sed -i 's/package icu.nullptr.hidemyapplist/package com.shipook.reader.mfxsdq/g'
-          find common/src/main/java -name "*.kt" | xargs sed -i 's/frknkrc44/shipook.reader.mfxsdq/g'
-          find common/src/main/java -name "*.kt" | xargs sed -i 's/import icu.nullptr.hidemyapplist/import com.shipook.reader.mfxsdq/g'
+          # 4. 替换所有Kotlin文件的导入语句
+          find app/src/main/java common/src/main/java -name "*.kt" | xargs sed -i 's/import org.frknkrc44.hma_oss/import com.shipook.reader.mfxsdq/g'
+          find app/src/main/java common/src/main/java -name "*.kt" | xargs sed -i 's/import icu.nullptr.hidemyapplist/import com.shipook.reader.mfxsdq/g'
+          
+          # 5. 替换硬编码的包名引用（完整替换为新包名）
+          find app/src/main/java common/src/main/java -name "*.kt" | xargs sed -i 's/org.frknkrc44.hma_oss/com.shipook.reader.mfxsdq/g'
+          find app/src/main/java common/src/main/java -name "*.kt" | xargs sed -i 's/icu.nullptr.hidemyapplist/com.shipook.reader.mfxsdq/g'
           
           # 6. 替换AndroidManifest.xml类路径
           sed -i 's/icu.nullptr.hidemyapplist.MyApp/com.shipook.reader.mfxsdq.MyApp/g' app/src/main/AndroidManifest.xml
