@@ -1,4 +1,4 @@
-name: 一键修改包名 
+name: 一键修改包名
 on: workflow_dispatch
 jobs:
   build-release-apk:
@@ -17,29 +17,38 @@ jobs:
           distribution: 'temurin'
           cache: 'gradle'
 
-      - name: 生成local.properties（指定Android SDK路径）
+      - name: 生成local.properties
         run: echo "sdk.dir=/usr/local/lib/android/sdk" > local.properties
 
-      - name: 全量替换包名、类路径、应用名称（彻底修复闪退）
+      - name: 全量替换包名（覆盖代码+配置）
         run: |
-          # 1. 替换核心包名变量
+          # 1. 替换根目录appPackageName
           sed -i 's/val appPackageName by extra("org.frknkrc44.hma_oss")/val appPackageName by extra("com.shipook.reader.mfxsdq")/' build.gradle.kts
           
-          # 2. 全局替换原始包名引用
-          find . -type f \( -name "*.kt" -o -name "*.java" -o -name "*.xml" -o -name "*.gradle" -o -name "*.gradle.kts" \) | xargs sed -i 's/org.frknkrc44.hma_oss/com.shipook.reader.mfxsdq/g'
+          # 2. 替换app模块namespace
+          sed -i 's/namespace = appPackageName/namespace = "com.shipook.reader.mfxsdq"/' app/build.gradle.kts
           
-          # 3. 替换硬编码类路径（修复MyApp、ServiceProvider找不到的问题）
-          find . -type f \( -name "*.xml" -o -name "*.kt" -o -name "*.java" \) | xargs sed -i 's/icu.nullptr.hidemyapplist/com.shipook.reader.mfxsdq/g'
+          # 3. 替换Kotlin文件的包声明（含子目录）
+          find app/src/main/java -name "*.kt" | xargs sed -i 's/package org.frknkrc44.hma_oss/package com.shipook.reader.mfxsdq/g'
+          find app/src/main/java -name "*.kt" | xargs sed -i 's/package icu.nullptr.hidemyapplist/package com.shipook.reader.mfxsdq/g'
           
-          # 4. 替换应用名称
+          # 4. 替换Kotlin文件的导入语句
+          find app/src/main/java -name "*.kt" | xargs sed -i 's/import org.frknkrc44.hma_oss/import com.shipook.reader.mfxsdq/g'
+          find app/src/main/java -name "*.kt" | xargs sed -i 's/import icu.nullptr.hidemyapplist/import com.shipook.reader.mfxsdq/g'
+          
+          # 5. 替换AndroidManifest.xml中的类路径
+          sed -i 's/icu.nullptr.hidemyapplist.MyApp/com.shipook.reader.mfxsdq.MyApp/g' app/src/main/AndroidManifest.xml
+          sed -i 's/icu.nullptr.hidemyapplist.service.ServiceProvider/com.shipook.reader.mfxsdq.service.ServiceProvider/g' app/src/main/AndroidManifest.xml
+          
+          # 6. 替换应用名称
           sed -i 's/<string name="app_name" translatable="false">HMA-OSS<\/string>/<string name="app_name" translatable="false">听书神器<\/string>/' app/src/main/res/values/strings.xml
 
-      - name: 构建Release正式版APK
+      - name: 构建Release APK
         run: |
           chmod +x ./gradlew
           ./gradlew assembleRelease --no-daemon
 
-      - name: 上传最终APK
+      - name: 上传APK
         uses: actions/upload-artifact@v4
         with:
           name: hma
