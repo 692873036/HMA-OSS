@@ -1,20 +1,23 @@
-name: Main
+name: Main（手动构建）
 
 on:
-  push:
-    branches: [ master ]
-    paths-ignore:
-      - '.github/ISSUE_TEMPLATE/**'
-      - '.github/workflows/issue.yml'
-      - '.github/workflows/pull_request.yml'
-      - '**.md'
-
-  # Allows you to run this workflow manually from the Actions tab
+  # 仅保留手动触发，删除push自动触发
   workflow_dispatch:
+    # 可选：添加手动触发时的自定义参数（如构建类型）
+    inputs:
+      buildType:
+        description: '构建类型（release/debug/all）'
+        required: true
+        default: 'all'
+        type: choice
+        options:
+          - all
+          - release
+          - debug
 
 jobs:
   build:
-    name: Build on ${{ matrix.os }}
+    name: Build ${{ github.event.inputs.buildType }} on ${{ matrix.os }}
     runs-on: ${{ matrix.os }}
     permissions:
       contents: write
@@ -22,7 +25,7 @@ jobs:
       fail-fast: false
       matrix:
         os: [ ubuntu-latest ]
-    if: ${{ !startsWith(github.event.head_commit.message, '[skip ci]') }}
+    # 移除[skip ci]判断（仅手动触发，无需跳过）
 
     steps:
       - name: Checkout
@@ -40,17 +43,25 @@ jobs:
           distribution: 'temurin'
           java-version: '21'
 
-      - name: Write key
-        if: github.event_name != 'pull_request' && github.ref == 'refs/heads/master'
+      - name: 生成调试签名密钥（自动签名）
         run: |
-          echo officialBuild=true >> local.properties
-          echo storePassword='${{ secrets.KEY_STORE_PASSWORD }}' >> local.properties
-          echo keyAlias='${{ secrets.ALIAS }}' >> local.properties
-          echo keyPassword='${{ secrets.ALIAS_KEY_PASSWORD }}' >> local.properties
-          echo fileDir=`pwd`/key.jks >> local.properties
-          echo crowdinProjectId='${{ secrets.CROWDIN_PROJECT_ID }}' >> local.properties
-          echo crowdinApiKey='${{ secrets.CROWDIN_LIST_MEMBERS_API_TOKEN }}' >> local.properties
-          echo "${{ secrets.KEY_STORE }}" | base64 --decode > key.jks
+          keytool -genkeypair -v \
+            -storetype PKCS12 \
+            -keyalg RSA \
+            -keysize 2048 \
+            -validity 10000 \
+            -alias androiddebugkey \
+            -storepass android \
+            -keypass android \
+            -dname "CN=Android Debug, O=Android, C=US" \
+            -keystore ~/.android/debug.keystore
+
+      - name: 配置Gradle自动签名
+        run: |
+          echo "android.injected.signing.store.file=${HOME}/.android/debug.keystore" >> ~/.gradle/gradle.properties
+          echo "android.injected.signing.store.password=android" >> ~/.gradle/gradle.properties
+          echo "android.injected.signing.key.alias=androiddebugkey" >> ~/.gradle/gradle.properties
+          echo "android.injected.signing.key.password=android" >> ~/.gradle/gradle.properties
 
       - name: Cache gradle
         uses: actions/cache@v4
@@ -62,59 +73,45 @@ jobs:
           restore-keys: ${{ runner.os }}-gradle-
 
       - name: Gradle prebuild
-        run: |
-          ./gradlew prebuild
+        run: ./gradlew prebuild
 
-      - name: Build all
+      - name: 构建指定类型APK
         id: buildAll
         run: |
-          ./gradlew assemble
-          echo "releaseName=$(ls app/build/outputs/apk/release/*.apk | awk -F '(/|.apk)' '{print $6}')" >> $GITHUB_OUTPUT
-          echo "debugName=$(ls app/build/outputs/apk/debug/*.apk | awk -F '(/|.apk)' '{print $6}')" >> $GITHUB_OUTPUT
-          echo "releaseFile=$(ls app/build/outputs/apk/release/*.apk)" >> $GITHUB_OUTPUT
-          echo "debugFile=$(ls app/build/outputs/apk/debug/*.apk)" >> $GITHUB_OUTPUT
-          echo "ossNum=$(ls app/build/outputs/apk/debug/*.apk | awk -F '(/|.apk)' '{print $6}' | cut -f4 -d'-')" >> $GITHUB_OUTPUT
+          # 根据手动选择的构建类型执行对应任务
+          if [ "${{ github.event.inputs.buildType }}" = "release" ]; then
+            ./gradlew assembleRelease
+            echo "releaseName=$(ls app/build/outputs/apk/release/*.apk | awk -F '(/|.apk)' '{print $6}')" >> $GITHUB_OUTPUT
+            echo "releaseFile=$(ls app/build/outputs/apk/release/*.apk)" >> $GITHUB_OUTPUT
+          elif [ "${{ github.event.inputs.buildType }}" = "debug" ]; then
+            ./gradlew assembleDebug
+            echo "debugName=$(ls app/build/outputs/apk/debug/*.apk | awk -F '(/|.apk)' '{print $6}')" >> $GITHUB_OUTPUT
+            echo "debugFile=$(ls app/build/outputs/apk/debug/*.apk)" >> $GITHUB_OUTPUT
+          else
+            ./gradlew assemble
+            echo "releaseName=$(ls app/build/outputs/apk/release/*.apk | awk -F '(/|.apk)' '{print $6}')" >> $GITHUB_OUTPUT
+            echo "debugName=$(ls app/build/outputs/apk/debug/*.apk | awk -F '(/|.apk)' '{print $6}')" >> $GITHUB_OUTPUT
+            echo "releaseFile=$(ls app/build/outputs/apk/release/*.apk)" >> $GITHUB_OUTPUT
+            echo "debugFile=$(ls app/build/outputs/apk/debug/*.apk)" >> $GITHUB_OUTPUT
+          fi
 
-      - name: Upload release
-        if: success()
+      - name: 上传Release APK（仅当构建类型为release/all时执行）
+        if: success() && (github.event.inputs.buildType == 'release' || github.event.inputs.buildType == 'all')
         uses: actions/upload-artifact@v4
         with:
           name: ${{ steps.buildAll.outputs.releaseName }}
           path: "app/build/outputs/apk/release/*.apk"
 
-      - name: Upload debug
-        if: success()
+      - name: 上传Debug APK（仅当构建类型为debug/all时执行）
+        if: success() && (github.event.inputs.buildType == 'debug' || github.event.inputs.buildType == 'all')
         uses: actions/upload-artifact@v4
         with:
           name: ${{ steps.buildAll.outputs.debugName }}
           path: "app/build/outputs/apk/debug/*.apk"
 
-      - name: Upload mappings
+      - name: 上传混淆映射（仅当构建类型为release/all时执行）
+        if: success() && (github.event.inputs.buildType == 'release' || github.event.inputs.buildType == 'all')
         uses: actions/upload-artifact@v4
         with:
           name: mappings
           path: "app/build/outputs/mapping/release"
-
-      - name: Upload to GitHub release
-        uses: softprops/action-gh-release@v2
-        with:
-          token: ${{ secrets.GITHUB_TOKEN }}
-          name: oss-${{ steps.buildAll.outputs.ossNum }}
-          body: ${{ github.event.head_commit.message }}
-          files: |
-            ${{ steps.buildAll.outputs.releaseFile }}
-            ${{ steps.buildAll.outputs.debugFile }}
-          tag_name: oss-${{ steps.buildAll.outputs.ossNum }}
-
-      - name: Post to channel
-        if: ${{ github.event_name != 'pull_request' && success() && github.ref == 'refs/heads/master' }}
-        env:
-          CHANNEL_ID: ${{ secrets.TELEGRAM_CHANNEL }}
-          BOT_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
-          COMMIT_URL: ${{ github.event.head_commit.url }}
-          COMMIT_MESSAGE: ${{ github.event.head_commit.message }}
-        run: |
-          export release=${{ steps.buildAll.outputs.releaseFile }}
-          export debug=${{ steps.buildAll.outputs.debugFile }}
-          ESCAPED=`python3 -c 'import json,os,urllib.parse; msg = json.dumps(os.environ["COMMIT_MESSAGE"]); print(urllib.parse.quote(msg if len(msg) <= 1024 else json.dumps(os.environ["COMMIT_URL"])))'`
-          curl -v "https://api.telegram.org/bot${BOT_TOKEN}/sendMediaGroup?chat_id=${CHANNEL_ID}&media=%5B%7B%22type%22:%22document%22,%20%22media%22:%22attach://release%22%7D,%7B%22type%22:%22document%22,%20%22media%22:%22attach://debug%22,%22caption%22:${ESCAPED}%7D%5D"  -F release="@$release" -F debug="@$debug"
