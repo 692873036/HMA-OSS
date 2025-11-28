@@ -1,4 +1,4 @@
-name: Build Release Audiobook Tool (Custom Package)
+name: 一键修改包名 (Custom Package)
 on: workflow_dispatch
 jobs:
   build-release-apk:
