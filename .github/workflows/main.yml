@@ -1,65 +1,48 @@
-name: Main（手动构建-未签名）
-
-on:
-  workflow_dispatch:
-    inputs:
-      buildType:
-        description: '构建类型（release/debug/all）'
-        required: true
-        default: 'all'
-        type: choice
-        options:
-          - all
-          - release
-          - debug
-
+name: APatch改包名自动流程（修复闪退+完整替换）
+on: [push]
 jobs:
   build:
-    name: Build ${{ github.event.inputs.buildType }} on ubuntu-latest
     runs-on: ubuntu-latest
-    permissions:
-      contents: write
-
     steps:
-      - name: Checkout
-        uses: actions/checkout@v5
+      - name: 安装依赖工具
+        run: sudo apt-get update && sudo apt-get install -y apktool zipalign wget dos2unix
+
+      - name: 配置Java环境
+        uses: actions/setup-java@v4
         with:
-          submodules: 'recursive'
-          fetch-depth: 0
+          java-version: '21'
+          distribution: 'temurin'
 
-      - name: Setup Java
-        uses: actions/setup-java@v5
-        with:
-          distribution: jetbrains
-          java-version: 21
+      - name: 下载原始APK
+        run: wget "https://github.com/frknkrc44/HMA-OSS/releases/download/oss-130/HMA-OSS-oss-130-release.apk" -O t.apk
 
-      - name: Setup Gradle
-        uses: gradle/actions/setup-gradle@v5
+      - name: 反编译（保留资源，避免闪退）
+        run: apktool d t.apk -o temp  # 移除 --no-res！资源缺失是闪退核心原因
 
-      - name: Setup Android SDK
-        uses: android-actions/setup-android@v3
-        with:
-          packages: ''
-
-      - name: 创建local.properties文件
-        run: touch ${GITHUB_WORKSPACE}/local.properties
-
-      - name: 构建未签名APK
-        id: buildAll
+      - name: 批量替换包名（全场景覆盖，避免残留）
         run: |
-          if [ "${{ github.event.inputs.buildType }}" = "release" ]; then
-            ./gradlew assembleRelease
-            echo "outputPath=app/build/outputs/apk/release/*.apk" >> $GITHUB_OUTPUT
-          elif [ "${{ github.event.inputs.buildType }}" = "debug" ]; then
-            ./gradlew assembleDebug
-            echo "outputPath=app/build/outputs/apk/debug/*.apk" >> $GITHUB_OUTPUT
-          else
-            ./gradlew assemble
-            echo "outputPath=app/build/outputs/apk/*/*.apk" >> $GITHUB_OUTPUT
-          fi
+          # 1. 替换Manifest和smali中的包名（含路径格式）
+          find temp -type f \( -name "*.smali" -o -name "AndroidManifest.xml" -o -name "*.xml" -o -name "*.txt" \) | xargs sed -i "s/org\.frknkrc44\.hma_oss/com\.shipook\.reader\.mfxsdq/g"
+          # 2. 替换smali中的类路径格式（L开头的格式）
+          find temp -name "*.smali" | xargs sed -i "s/Lorg\/frknkrc44\/hma_oss/Lcom\/shipook\/reader\/mfxsdq/g"
+          # 3. 替换资源文件中引用的包名（如strings.xml、布局文件等）
+          find temp/res -name "*.xml" | xargs sed -i "s/org\.frknkrc44\.hma_oss/com\.shipook\.reader\.mfxsdq/g"
+          # 4. 替换smali目录结构（关键！否则找不到类，必闪退）
+          mv temp/smali/org/frknkrc44/hma_oss temp/smali/com/shipook/reader/mfxsdq
+          # 5. 修复目录权限
+          chmod -R 755 temp/smali/com
 
-      - name: 上传未签名APK
-        uses: actions/upload-artifact@v5
+      - name: 重编译APK（保留资源）
+        run: apktool b temp -o m.apk  # 移除 --no-res，使用完整资源编译
+
+      - name: 生成签名密钥+签名APK
+        run: |
+          keytool -genkey -v -keystore k.keystore -alias a -storepass 123456 -keypass 123456 -dname "CN=A" -keyalg RSA -keysize 2048 -validity 3650
+          jarsigner -sigalg SHA256withRSA -digestalg SHA-256 -keystore k.keystore -storepass 123456 -keypass 123456 m.apk a
+          zipalign -f 4 m.apk f.apk
+
+      - name: 上传成品APK（纯英文名称，避免报错）
+        uses: actions/upload-artifact@v4
         with:
-          name: APK-${{ github.event.inputs.buildType }}-Unsigned
-          path: ${{ steps.buildAll.outputs.outputPath }}
+          name: patched-renamed-apk
+          path: f.apk
