@@ -42,9 +42,7 @@ jobs:
 
       - name: 生成调试签名密钥（自动签名）
         run: |
-          # 先创建.android目录（修复目录不存在问题）
           mkdir -p ~/.android
-          # 生成调试密钥库
           keytool -genkeypair -v \
             -storetype PKCS12 \
             -keyalg RSA \
@@ -58,6 +56,9 @@ jobs:
 
       - name: 配置Gradle自动签名
         run: |
+          # 先创建gradle.properties文件
+          touch ~/.gradle/gradle.properties
+          # 追加签名配置
           echo "android.injected.signing.store.file=${HOME}/.android/debug.keystore" >> ~/.gradle/gradle.properties
           echo "android.injected.signing.store.password=android" >> ~/.gradle/gradle.properties
           echo "android.injected.signing.key.alias=androiddebugkey" >> ~/.gradle/gradle.properties
