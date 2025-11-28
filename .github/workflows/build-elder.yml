@@ -1,0 +1,44 @@
+name: 手动构建懒人听书大字版
+# 仅允许手动触发，不自动触发
+on: workflow_dispatch
+jobs:
+  build-apk:
+    runs-on: ubuntu-latest
+    steps:
+      # 步骤1：拉取仓库源码
+      - name: 拉取HMA源码
+        uses: actions/checkout@v4
+
+      # 步骤2：配置JDK 21环境
+      - name: 配置JDK 21
+        uses: actions/setup-java@v4
+        with:
+          java-version: '21'
+          distribution: 'temurin'
+          cache: 'gradle' # 缓存依赖，加速构建
+
+      # 步骤3：修改包名和应用名称
+      - name: 替换包名与应用名
+        run: |
+          # 修改build.gradle.kts中的包名
+          sed -i 's/applicationId = ".*"/applicationId = "bubei.tingshu.elder"/' app/build.gradle.kts
+          # 修改Constants.java中的包名常量
+          sed -i 's/icu.nullptr.hidemyapplist/bubei.tingshu.elder/g' app/src/main/java/icu/nullptr/hidemyapplist/common/Constants.java
+          # 修改AndroidManifest.xml中的包名
+          sed -i 's/icu.nullptr.hidemyapplist/bubei.tingshu.elder/g' app/src/main/AndroidManifest.xml
+          # 修改应用名为懒人听书大字版
+          sed -i 's/<string name="app_name">.*<\/string>/<string name="app_name">懒人听书大字版<\/string>/' app/src/main/res/values/strings.xml
+
+      # 步骤4：授权并构建Debug版APK
+      - name: 授权gradlew并构建
+        run: |
+          chmod +x ./gradlew # 赋予执行权限
+          ./gradlew assembleDebug --no-daemon # 构建APK
+
+      # 步骤5：上传构建好的APK供下载
+      - name: 上传APK产物
+        uses: actions/upload-artifact@v4
+        with:
+          name: 懒人听书大字版APK
+          path: app/build/outputs/apk/debug/*.apk
+          retention-days: 30 # 产物保留30天
