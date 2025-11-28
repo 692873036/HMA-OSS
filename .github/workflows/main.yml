@@ -1,9 +1,7 @@
 name: Main（手动构建）
 
 on:
-  # 仅保留手动触发，删除push自动触发
   workflow_dispatch:
-    # 可选：添加手动触发时的自定义参数（如构建类型）
     inputs:
       buildType:
         description: '构建类型（release/debug/all）'
@@ -25,7 +23,6 @@ jobs:
       fail-fast: false
       matrix:
         os: [ ubuntu-latest ]
-    # 移除[skip ci]判断（仅手动触发，无需跳过）
 
     steps:
       - name: Checkout
@@ -45,6 +42,9 @@ jobs:
 
       - name: 生成调试签名密钥（自动签名）
         run: |
+          # 先创建.android目录（修复目录不存在问题）
+          mkdir -p ~/.android
+          # 生成调试密钥库
           keytool -genkeypair -v \
             -storetype PKCS12 \
             -keyalg RSA \
@@ -78,7 +78,6 @@ jobs:
       - name: 构建指定类型APK
         id: buildAll
         run: |
-          # 根据手动选择的构建类型执行对应任务
           if [ "${{ github.event.inputs.buildType }}" = "release" ]; then
             ./gradlew assembleRelease
             echo "releaseName=$(ls app/build/outputs/apk/release/*.apk | awk -F '(/|.apk)' '{print $6}')" >> $GITHUB_OUTPUT
@@ -95,21 +94,21 @@ jobs:
             echo "debugFile=$(ls app/build/outputs/apk/debug/*.apk)" >> $GITHUB_OUTPUT
           fi
 
-      - name: 上传Release APK（仅当构建类型为release/all时执行）
+      - name: 上传Release APK
         if: success() && (github.event.inputs.buildType == 'release' || github.event.inputs.buildType == 'all')
         uses: actions/upload-artifact@v4
         with:
           name: ${{ steps.buildAll.outputs.releaseName }}
           path: "app/build/outputs/apk/release/*.apk"
 
-      - name: 上传Debug APK（仅当构建类型为debug/all时执行）
+      - name: 上传Debug APK
         if: success() && (github.event.inputs.buildType == 'debug' || github.event.inputs.buildType == 'all')
         uses: actions/upload-artifact@v4
         with:
           name: ${{ steps.buildAll.outputs.debugName }}
           path: "app/build/outputs/apk/debug/*.apk"
 
-      - name: 上传混淆映射（仅当构建类型为release/all时执行）
+      - name: 上传混淆映射
         if: success() && (github.event.inputs.buildType == 'release' || github.event.inputs.buildType == 'all')
         uses: actions/upload-artifact@v4
         with:
