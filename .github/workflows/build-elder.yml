@@ -19,7 +19,7 @@ jobs:
           # 1. 修改build.gradle.kts中的包名
           sed -i 's/applicationId = ".*"/applicationId = "bubei.tingshu.elder"/' app/build.gradle.kts
           
-          # 2. 修改Constants.java中的包名常量（修正路径）
+          # 2. 修改Constants.java中的包名常量
           sed -i 's/icu.nullptr.hidemyapplist/bubei.tingshu.elder/g' app/src/main/java/icu/nullptr/hidemyapplist/Constants.java
           
           # 3. 修改AndroidManifest.xml中的包名
@@ -28,8 +28,8 @@ jobs:
           # 4. 修改应用名为懒人听书大字版
           sed -i 's/<string name="app_name">.*<\/string>/<string name="app_name">懒人听书大字版<\/string>/' app/src/main/res/values/strings.xml
           
-          # 5. 移除签名校验（修改Utils.kt）
-          sed -i '/fun verifyAppSignature(path: String): Boolean {/,/}/c\fun verifyAppSignature(path: String): Boolean {\n    return true\n}' app/src/main/java/icu/nullptr/hidemyapplist/util/Utils.kt
+          # 5. 移除签名校验（修正Utils.kt路径）
+          sed -i '/fun verifyAppSignature(path: String): Boolean {/,/}/c\fun verifyAppSignature(path: String): Boolean {\n    return true\n}' app/src/main/java/icu/nullptr/hidemyapplist/utils/Utils.kt
 
       - name: 授权并构建APK
         run: |
