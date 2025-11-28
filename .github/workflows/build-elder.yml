@@ -1,4 +1,4 @@
-name: 极简语法版-全模块包名替换
+name: 最终无语法错误版-包名替换
 on: workflow_dispatch
 jobs:
   build-release-apk:
@@ -19,7 +19,7 @@ jobs:
       - name: 生成local.properties
         run: echo "sdk.dir=/usr/local/lib/android/sdk" > local.properties
 
-      - name: 全模块包名替换（极简语法）
+      - name: 全模块包名替换（彻底修复语法）
         run: |
           OLD1="org.frknkrc44.hma_oss"
           OLD2="icu/nullptr/hidemyapplist"
