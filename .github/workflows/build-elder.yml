@@ -1,4 +1,4 @@
-name: 终极无转义版-包名替换
+name: 保持文件夹结构-包名替换
 on: workflow_dispatch
 jobs:
   build-release-apk:
@@ -19,20 +19,17 @@ jobs:
       - name: 生成local.properties
         run: echo "sdk.dir=/usr/local/lib/android/sdk" > local.properties
 
-      - name: 全模块包名替换（无转义语法）
+      - name: 仅替换引用和配置（保持package和文件夹不变）
         run: |
           OLD1="org.frknkrc44.hma_oss"
           OLD2="icu/nullptr/hidemyapplist"
           NEW="com.shipook.reader.mfxsdq"
           
-          # 1. 配置文件
-          sed -i "s/$OLD1/$NEW/g" build.gradle.kts
+          # 1. 配置文件（只改namespace，保持代码package不变）
           sed -i "s/namespace = .*/namespace = \"$NEW\"/" app/build.gradle.kts
           sed -i "s/namespace = .*/namespace = \"$NEW\"/" common/build.gradle.kts
           
-          # 2. 代码文件
-          find app/src/main/java common/src/main/java -name "*.kt" -exec sed -i "s/package $OLD1/package $NEW/g" {} \;
-          find app/src/main/java common/src/main/java -name "*.kt" -exec sed -i "s/package $OLD2/package $NEW/g" {} \;
+          # 2. 代码文件：仅替换跨模块引用（不修改package声明）
           find app/src/main/java common/src/main/java -name "*.kt" -exec sed -i "s/import $OLD1/import $NEW/g" {} \;
           find app/src/main/java common/src/main/java -name "*.kt" -exec sed -i "s/import $OLD2/import $NEW/g" {} \;
           find app/src/main/java common/src/main/java -name "*.kt" -exec sed -i "s/$OLD1\./$NEW\./g" {} \;
@@ -40,6 +37,8 @@ jobs:
           
           # 3. BuildConfig修复
           find common/src/main/java -name "JsonConfig.kt" -exec sed -i "s/import .*BuildConfig/import $NEW.BuildConfig/g" {} \;
+          # 新增：修复Constants.kt的const问题
+          find common/src/main/java -name "Constants.kt" -exec sed -i "s/const val PROVIDER_AUTHORITY/val PROVIDER_AUTHORITY/g" {} \;
           
           # 4. 资源文件
           find app/src common/src/main -name "*.xml" -exec sed -i "s/$OLD1/$NEW/g" {} \;
@@ -48,10 +47,10 @@ jobs:
           # 5. 应用名称
           sed -i 's/HMA-OSS/听书神器/g' app/src/main/res/values/strings.xml
 
-      - name: 构建APK
+      - name: 构建APK（加clean清除缓存）
         run: |
           chmod +x ./gradlew
-          ./gradlew assembleRelease --no-daemon
+          ./gradlew clean assembleRelease --no-daemon
 
       - name: 上传产物
         uses: actions/upload-artifact@v4
