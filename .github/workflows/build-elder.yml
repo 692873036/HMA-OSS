@@ -1,4 +1,4 @@
-name: 精准包名替换构建版
+name: 修复硬编码片段版
 on: workflow_dispatch
 jobs:
   build-release-apk:
@@ -19,18 +19,19 @@ jobs:
       - name: 生成local.properties
         run: echo "sdk.dir=/usr/local/lib/android/sdk" > local.properties
 
-      - name: 精准替换包名与应用名称
+      - name: 全量替换（含硬编码片段）
         run: |
-          # 1. 替换根目录appPackageName
+          # 1. 替换配置与package声明
           sed -i 's/val appPackageName by extra("org.frknkrc44.hma_oss")/val appPackageName by extra("com.shipook.reader.mfxsdq")/' build.gradle.kts
-          
-          # 2. 替换app模块的namespace
           sed -i 's/namespace = appPackageName/namespace = "com.shipook.reader.mfxsdq"/' app/build.gradle.kts
-          
-          # 3. 替换common模块的namespace
           sed -i 's/namespace = "icu.nullptr.hidemyapplist"/namespace = "com.shipook.reader.mfxsdq"/' common/build.gradle.kts
+          find app/src/main/java common/src/main/java -name "*.kt" | xargs sed -i 's/package org.frknkrc44.hma_oss/package com.shipook.reader.mfxsdq/g'
+          find app/src/main/java common/src/main/java -name "*.kt" | xargs sed -i 's/package icu.nullptr.hidemyapplist/package com.shipook.reader.mfxsdq/g'
           
-          # 4. 替换应用名称
+          # 2. 替换硬编码的包名片段
+          find app/src/main/java common/src/main/java -name "*.kt" | xargs sed -i 's/frknkrc44/shipook.reader.mfxsdq/g'
+          
+          # 3. 替换应用名称
           sed -i 's/<string name="app_name" translatable="false">HMA-OSS<\/string>/<string name="app_name" translatable="false">听书神器<\/string>/' app/src/main/res/values/strings.xml
 
       - name: 构建APK
@@ -41,5 +42,5 @@ jobs:
       - name: 上传产物
         uses: actions/upload-artifact@v4
         with:
-          name: hma-modified
+          name: hma-fixed
           path: app/build/outputs/apk/release/*.apk
