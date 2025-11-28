@@ -19,13 +19,25 @@ jobs:
       - name: 下载APK
         run: wget "https://github.com/frknkrc44/HMA-OSS/releases/download/oss-130/HMA-OSS-oss-130-release.apk" -O target.apk
 
-      - name: 改包名+签名
+      - name: 改包名+签名（修复Smali格式）
         run: |
+          # 解包APK
           apktool d target.apk -o temp
-          find temp -name "*.xml" -o -name "*.smali" | xargs sed -i "s/org.frknkrc44.hma_oss/com.shipook.reader.mfxsdq/g"
+          
+          # 替换Smali文件中的包名（匹配Lorg/frknkrc44/hma_oss格式）
+          find temp -name "*.smali" | xargs sed -i "s/Lorg\/frknkrc44\/hma_oss/Lcom\/shipook\/reader\/mfxsdq/g"
+          
+          # 替换AndroidManifest.xml中的包名（匹配org.frknkrc44.hma_oss格式）
+          find temp -name "AndroidManifest.xml" | xargs sed -i "s/org.frknkrc44.hma_oss/com.shipook.reader.mfxsdq/g"
+          
+          # 重打包APK
           apktool b temp -o modified.apk
+          
+          # 生成签名密钥并签名
           keytool -genkey -v -keystore k.keystore -alias a -storepass 123456 -keypass 123456 -dname "CN=A"
           jarsigner -sigalg SHA256withRSA -digestalg SHA-256 -keystore k.keystore modified.apk a -storepass 123456
+          
+          # 对齐APK
           zipalign -f 4 modified.apk final.apk
 
       - name: 上传结果
