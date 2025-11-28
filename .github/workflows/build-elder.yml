@@ -1,11 +1,13 @@
-name: 手动构建听书神器
+name: 手动构建听书神器（org.frknkrc44.hma_oss分支）
 on: workflow_dispatch
 jobs:
   build-apk:
     runs-on: ubuntu-latest
     steps:
-      - name: 拉取源码
+      - name: 拉取org.frknkrc44.hma_oss分支源码
         uses: actions/checkout@v4
+        with:
+          ref: org.frknkrc44.hma_oss # 明确指定目标分支，避免拉取默认分支
 
       - name: 配置JDK 21
         uses: actions/setup-java@v4
@@ -14,25 +16,25 @@ jobs:
           distribution: 'temurin'
           cache: 'gradle'
 
-      - name: 修改包名与应用名称
+      - name: 修改包名与应用名称（精准匹配分支原始配置）
         run: |
-          # 1. 修改build.gradle.kts中的包名为目标包名
-          sed -i 's/applicationId = ".*"/applicationId = "com.shipook.reader.mfxsdq"/' app/build.gradle.kts
+          # 1. 替换build.gradle.kts中的applicationId（分支原始包名已确认是org.frknkrc44.hma_oss）
+          sed -i 's/applicationId = "org.frknkrc44.hma_oss"/applicationId = "com.shipook.reader.mfxsdq"/' app/build.gradle.kts
           
-          # 2. 修改AndroidManifest.xml中的包名
-          sed -i 's/原包名/com.shipook.reader.mfxsdq/g' app/src/main/AndroidManifest.xml
+          # 2. 替换AndroidManifest.xml中的package属性（与分支原始包名一致）
+          sed -i 's/package="org.frknkrc44.hma_oss"/package="com.shipook.reader.mfxsdq"/' app/src/main/AndroidManifest.xml
           
-          # 3. 修改应用名为“听书神器”
+          # 3. 替换应用名称（覆盖分支原有名称）
           sed -i 's/<string name="app_name">.*<\/string>/<string name="app_name">听书神器<\/string>/' app/src/main/res/values/strings.xml
 
-      - name: 构建APK
+      - name: 授权并构建Debug APK
         run: |
           chmod +x ./gradlew
-          ./gradlew assembleDebug --no-daemon
+          ./gradlew assembleDebug --no-daemon # 禁用守护进程，提升构建稳定性
 
       - name: 上传APK产物
         uses: actions/upload-artifact@v4
         with:
-          name: 听书神器APK
+          name: 听书神器-DEBUG版
           path: app/build/outputs/apk/debug/*.apk
-          retention-days: 30
+          retention-days: 30 # 产物保留30天，可按需调整
