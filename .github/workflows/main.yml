@@ -41,10 +41,12 @@ jobs:
         with:
           packages: ''
 
+      - name: 创建local.properties文件
+        run: touch ${GITHUB_WORKSPACE}/local.properties
+
       - name: 构建未签名APK
         id: buildAll
         run: |
-          # 直接使用assemble命令，依赖项目本身无强制签名
           if [ "${{ github.event.inputs.buildType }}" = "release" ]; then
             ./gradlew assembleRelease
             echo "outputPath=app/build/outputs/apk/release/*.apk" >> $GITHUB_OUTPUT
