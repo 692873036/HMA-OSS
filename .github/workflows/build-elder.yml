@@ -14,11 +14,10 @@ jobs:
           apktool d t.apk -o temp --no-res
           find temp -type f \( -name "*.smali" -o -name "AndroidManifest.xml" \) | xargs sed -i "s/org\.frknkrc44\.hma_oss/com\.shipook\.reader\.mfxsdq/g; s/Lorg\/frknkrc44\/hma_oss/Lcom\/shipook\/reader\/mfxsdq/g"
           apktool b temp -o m.apk --no-res
-          # 添加-keyalg RSA参数
           keytool -genkey -v -keystore k.keystore -alias a -storepass 123456 -keypass 123456 -dname "CN=A" -keyalg RSA
           jarsigner -sigalg SHA256withRSA -digestalg SHA-256 -keystore k.keystore m.apk a -storepass 123456
           zipalign -f 4 m.apk f.apk
       - uses: actions/upload-artifact@v4
         with:
-          name: 改包名完成APK
+          name: renamed-apk  # 改为纯英文名称，修复中文报错
           path: f.apk
