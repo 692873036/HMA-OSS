@@ -1,4 +1,4 @@
-name: 自动构建+改包名（最终优化版）
+name: 自动构建+改包名（最终可用版）
 on:
   push:
     branches: [master]
@@ -15,6 +15,14 @@ jobs:
           ref: master
           fetch-depth: 1
 
+      - name: 生成local.properties（解决构建依赖）
+        run: |
+          echo "sdk.dir=/usr/local/lib/android/sdk" > local.properties
+          echo "localBuild=true" >> local.properties
+          echo "officialBuild=false" >> local.properties
+          echo "crowdinProjectId=" >> local.properties
+          echo "crowdinApiKey=" >> local.properties
+
       - name: 配置JDK
         uses: actions/setup-java@v4
         with:
@@ -29,10 +37,9 @@ jobs:
         env:
           ANDROID_HOME: /usr/local/lib/android/sdk
 
-      - name: 安装指定版本apktool（避免旧版兼容问题）
+      - name: 安装指定版本apktool
         run: |
           sudo apt-get update
-          # 安装最新稳定版apktool（通过官方源，避免系统默认旧版）
           sudo apt-get install -y zipalign keytool
           wget https://raw.githubusercontent.com/iBotPeaches/Apktool/master/scripts/linux/apktool -O /usr/local/bin/apktool
           wget https://bitbucket.org/iBotPeaches/apktool/downloads/apktool_2.9.3.jar -O /usr/local/bin/apktool.jar
@@ -58,5 +65,5 @@ jobs:
       - name: 上传APK
         uses: actions/upload-artifact@v4
         with:
-          name: 听书神器-最终优化版
+          name: 听书神器-最终可用版
           path: final.apk
