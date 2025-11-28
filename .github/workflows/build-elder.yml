@@ -1,4 +1,4 @@
-name: 完全保留文件结构-覆盖所有包名引用版
+name: 完全保留文件结构-终极包名替换版
 on: workflow_dispatch
 jobs:
   build-release-apk:
@@ -19,19 +19,18 @@ jobs:
       - name: 生成local.properties
         run: echo "sdk.dir=/usr/local/lib/android/sdk" > local.properties
 
-      - name: 全量替换包名（含代码、字符串、配置引用）
+      - name: 终极全量替换包名（覆盖所有场景）
         run: |
-          # 定义完整新旧包名
           OLD_PACKAGE1="org.frknkrc44.hma_oss"
           OLD_PACKAGE2="icu.nullptr.hidemyapplist"
           NEW_PACKAGE="com.shipook.reader.mfxsdq"
           
-          # 1. 配置文件中的包名替换
+          # 1. 配置文件替换
           sed -i "s/$OLD_PACKAGE1/$NEW_PACKAGE/g" build.gradle.kts
           sed -i "s/namespace = appPackageName/namespace = \"$NEW_PACKAGE\"/" app/build.gradle.kts
           sed -i "s/$OLD_PACKAGE2/$NEW_PACKAGE/g" common/build.gradle.kts
           
-          # 2. 代码文件的package声明、import、类引用替换
+          # 2. 代码语法层替换（package/import/类引用）
           find app/src/main/java common/src/main/java -name "*.kt" | xargs sed -i "s/package $OLD_PACKAGE1/package $NEW_PACKAGE/g"
           find app/src/main/java common/src/main/java -name "*.kt" | xargs sed -i "s/package $OLD_PACKAGE2/package $NEW_PACKAGE/g"
           find app/src/main/java common/src/main/java -name "*.kt" | xargs sed -i "s/import $OLD_PACKAGE1/import $NEW_PACKAGE/g"
@@ -39,11 +38,19 @@ jobs:
           find app/src/main/java common/src/main/java -name "*.kt" | xargs sed -i "s/$OLD_PACKAGE1\./$NEW_PACKAGE\./g"
           find app/src/main/java common/src/main/java -name "*.kt" | xargs sed -i "s/$OLD_PACKAGE2\./$NEW_PACKAGE\./g"
           
-          # 3. 字符串形式的包名引用替换（如"org.frknkrc44.hma_oss"）
+          # 3. 字符串形式包名替换
           find app/src/main/java common/src/main/java -name "*.kt" -o -name "*.xml" | xargs sed -i "s/\"$OLD_PACKAGE1\"/\"$NEW_PACKAGE\"/g"
           find app/src/main/java common/src/main/java -name "*.kt" -o -name "*.xml" | xargs sed -i "s/\"$OLD_PACKAGE2\"/\"$NEW_PACKAGE\"/g"
           
-          # 4. 应用名称替换
+          # 4. 资源文件（AndroidManifest）替换
+          find app/src/main -name "AndroidManifest.xml" | xargs sed -i "s/package=\"$OLD_PACKAGE1\"/package=\"$NEW_PACKAGE\"/g"
+          find app/src/main -name "AndroidManifest.xml" | xargs sed -i "s/package=\"$OLD_PACKAGE2\"/package=\"$NEW_PACKAGE\"/g"
+          
+          # 5. 注解中的包名替换
+          find app/src/main/java -name "*.kt" | xargs sed -i "s/@\([A-Za-z0-9_.]*\)(\"$OLD_PACKAGE1\")/@\1(\"$NEW_PACKAGE\")/g"
+          find app/src/main/java -name "*.kt" | xargs sed -i "s/@\([A-Za-z0-9_.]*\)(\"$OLD_PACKAGE2\")/@\1(\"$NEW_PACKAGE\")/g"
+          
+          # 6. 应用名称替换
           sed -i 's/<string name="app_name" translatable="false">HMA-OSS<\/string>/<string name="app_name" translatable="false">听书神器<\/string>/' app/src/main/res/values/strings.xml
 
       - name: 构建APK
@@ -54,5 +61,5 @@ jobs:
       - name: 上传产物
         uses: actions/upload-artifact@v4
         with:
-          name: 全量替换包名_可用APK
+          name: 终极替换_可编译APK
           path: app/build/outputs/apk/release/*.apk
