@@ -1,8 +1,8 @@
-name: 听书神器-固定包名共存版构建
+name: 听书神器-固定包名共存版（可直接运行）
 on:
   push:
     branches: [ main ]
-  workflow_dispatch:  # 支持手动触发（推荐测试）
+  workflow_dispatch:  # 手动触发优先测试
 
 jobs:
   build-coexist-shipook:
@@ -11,86 +11,64 @@ jobs:
       - name: 拉取代码仓库
         uses: actions/checkout@v4
 
-      - name: 安装依赖工具（Java/apktool/zipalign）
+      - name: 安装依赖（精简必要工具）
         run: |
           sudo apt-get update
           sudo apt-get install -y openjdk-17-jdk apktool zipalign keytool
 
-      - name: 核心配置（已固定目标包名，无需修改）
-        id: config
+      - name: 核心配置（仅保留必要参数）
         run: |
-          # 固定配置（目标包名：com.shipook.reader.mfxsdq）
-          echo "原根包名=com.xxx.audiobook" >> $GITHUB_ENV  # 替换为听书神器原始包名（必改！）
-          echo "新根包名=com.shipook.reader.mfxsdq" >> $GITHUB_ENV  # 固定目标包名，不修改
-          echo "APK输入路径=app/release/audiobook.apk" >> $GITHUB_ENV  # 替换为你仓库中APK的实际路径（必改！）
-          echo "临时目录=temp_build" >> $GITHUB_ENV
-          echo "输出目录=shipook_coexist" >> $GITHUB_ENV
+          echo "ORIGIN_PACKAGE=com.xxx.audiobook" >> $GITHUB_ENV  # 必改：替换为听书神器原始包名
+          echo "TARGET_PACKAGE=com.shipook.reader.mfxsdq" >> $GITHUB_ENV  # 固定目标包名
+          echo "APK_INPUT=app/release/audiobook.apk" >> $GITHUB_ENV  # 必改：替换为仓库中APK实际路径
+          echo "TEMP_DIR=temp" >> $GITHUB_ENV
+          echo "OUTPUT_DIR=output" >> $GITHUB_ENV
 
       - name: 创建工作目录
-        run: mkdir -p ${{ env.临时目录 }} ${{ env.输出目录 }}
+        run: mkdir -p ${{ env.TEMP_DIR }} ${{ env.OUTPUT_DIR }}
 
-      - name: 反编译听书神器APK
-        run: |
-          apktool d ${{ env.APK输入路径 }} -o ${{ env.临时目录 }} --no-src  # 仅处理Manifest和资源
-          echo "✅ 反编译完成"
+      - name: 反编译APK（保留所有资源和源码，避免闪退）
+        run: apktool d ${{ env.APK_INPUT }} -o ${{ env.TEMP_DIR }}  # 移除 --no-src，完整反编译
 
-      - name: 精准修改Manifest（固定包名+关联配置）
+      - name: 完整替换包名（覆盖所有场景，无残留）
         run: |
-          MANIFEST_PATH="${{ env.临时目录 }}/AndroidManifest.xml"
-          
-          # 1. 核心：修改根包名为 com.shipook.reader.mfxsdq
-          sed -i "s/package=\"${{ env.原根包名 }}\"/package=\"${{ env.新根包名 }}\"/g" $MANIFEST_PATH
-          
-          # 2. 修改自定义权限（替换原包名前缀，避免冲突）
-          sed -i "s/${{ env.原根包名 }}./${{ env.新根包名 }}./g" $MANIFEST_PATH
-          
-          # 3. 修改Provider的authorities（确保组件调用正常）
-          sed -i "s/android:authorities=\"${{ env.原根包名 }}./android:authorities=\"${{ env.新根包名 }}./g" $MANIFEST_PATH
-          
-          # 4. 处理其他依赖根包名的配置（如<meta-data>、接收器权限等）
-          sed -i "s/${{ env.原根包名 }}/${{ env.新根包名 }}/g" $MANIFEST_PATH
-          
-          echo "✅ Manifest修改完成，目标包名：${{ env.新根包名 }}"
+          # 1. 替换所有文件中的包名文本
+          find ${{ env.TEMP_DIR }} -type f \( -name "*.smali" -o -name "*.xml" -o -name "AndroidManifest.xml" \) | xargs sed -i "s/${{ env.ORIGIN_PACKAGE }}/${{ env.TARGET_PACKAGE }}/g"
+          # 2. 替换smali类路径格式（L开头）
+          find ${{ env.TEMP_DIR }}/smali -name "*.smali" | xargs sed -i "s/L${{ env.ORIGIN_PACKAGE//./\/ }}/L${{ env.TARGET_PACKAGE//./\/ }}/g"
+          # 3. 调整smali目录结构（关键！否则找不到类）
+          ORIGIN_PATH=$(echo ${{ env.ORIGIN_PACKAGE }} | tr '.' '/')
+          TARGET_PATH=$(echo ${{ env.TARGET_PACKAGE }} | tr '.' '/')
+          mv ${{ env.TEMP_DIR }}/smali/$ORIGIN_PATH ${{ env.TEMP_DIR }}/smali/$TARGET_PATH
+          # 4. 修复目录权限
+          chmod -R 755 ${{ env.TEMP_DIR }}/smali
 
-      - name: 重编译APK（生成未签名版）
-        run: |
-          apktool b ${{ env.临时目录 }} -o ${{ env.输出目录 }}/shipook_unsigned.apk
-          echo "✅ 重编译完成"
+      - name: 重编译APK（完整资源+源码）
+        run: apktool b ${{ env.TEMP_DIR }} -o ${{ env.OUTPUT_DIR }}/unsigned.apk
 
-      - name: APK签名（符合安卓安装要求）
+      - name: 签名APK（简化配置，确保兼容）
         run: |
-          # 生成临时密钥库（正式使用建议用GitHub Secrets存储自定义密钥）
-          KEYSTORE_PATH="${{ env.输出目录 }}/shipook_sign.keystore"
+          # 生成密钥库
           keytool -genkeypair \
-            -keystore $KEYSTORE_PATH \
-            -alias ${{ secrets.SHIPOOK_KEY_ALIAS || 'shipook_coexist' }} \
+            -keystore ${{ env.OUTPUT_DIR }}/sign.keystore \
+            -alias shipook \
             -keyalg RSA \
             -keysize 2048 \
             -validity 3650 \
-            -storepass ${{ secrets.SHIPOOK_KEYSTORE_PASS || 'shipook123' }} \
-            -keypass ${{ secrets.SHIPOOK_KEY_PASS || 'shipook123' }} \
-            -dname "CN=Shipook,OU=Coexist,O=User,L=City,ST=Province,C=CN"
-          
-          # 签名APK
-          jarsigner -verbose \
-            -sigalg SHA256withRSA \
-            -digestalg SHA-256 \
-            -keystore $KEYSTORE_PATH \
-            -storepass ${{ secrets.SHIPOOK_KEYSTORE_PASS || 'shipook123' }} \
-            -keypass ${{ secrets.SHIPOOK_KEY_PASS || 'shipook123' }} \
-            ${{ env.输出目录 }}/shipook_unsigned.apk \
-            ${{ secrets.SHIPOOK_KEY_ALIAS || 'shipook_coexist' }}
-          
-          # Zipalign优化（提升运行效率）
-          zipalign -v 4 \
-            ${{ env.输出目录 }}/shipook_unsigned.apk \
-            ${{ env.输出目录 }}/com.shipook.reader.mfxsdq_signed.apk
-          
-          echo "✅ 签名完成，最终包名：com.shipook.reader.mfxsdq"
+            -storepass 123456 \
+            -keypass 123456 \
+            -dname "CN=Shipook"
+          # 签名
+          jarsigner -sigalg SHA256withRSA -digestalg SHA-256 \
+            -keystore ${{ env.OUTPUT_DIR }}/sign.keystore \
+            -storepass 123456 -keypass 123456 \
+            ${{ env.OUTPUT_DIR }}/unsigned.apk shipook
+          # Zipalign优化
+          zipalign -f 4 ${{ env.OUTPUT_DIR }}/unsigned.apk ${{ env.OUTPUT_DIR }}/shipook_signed.apk
 
-      - name: 上传成品APK（直接下载安装）
+      - name: 上传APK（纯英文名称，避免报错）
         uses: actions/upload-artifact@v4
         with:
-          name: 听书神器-共存版（com.shipook.reader.mfxsdq）
-          path: ${{ env.输出目录 }}/com.shipook.reader.mfxsdq_signed.apk
-          retention-days: 90  # 成品保留90天
+          name: shipook-reader-coexist-apk
+          path: ${{ env.OUTPUT_DIR }}/shipook_signed.apk
+          retention-days: 90
