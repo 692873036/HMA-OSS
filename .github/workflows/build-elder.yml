@@ -1,4 +1,4 @@
-name: 语法修复版-全模块包名替换
+name: 极简语法版-全模块包名替换
 on: workflow_dispatch
 jobs:
   build-release-apk:
@@ -19,35 +19,34 @@ jobs:
       - name: 生成local.properties
         run: echo "sdk.dir=/usr/local/lib/android/sdk" > local.properties
 
-      - name: 全模块包名替换（修复sed语法）
+      - name: 全模块包名替换（极简语法）
         run: |
-          OLD_PACKAGE1="org.frknkrc44.hma_oss"
-          OLD_PACKAGE2="icu/nullptr/hidemyapplist"
-          NEW_PACKAGE="com.shipook.reader.mfxsdq"
+          OLD1="org.frknkrc44.hma_oss"
+          OLD2="icu/nullptr/hidemyapplist"
+          NEW="com.shipook.reader.mfxsdq"
           
-          # 1. 配置文件替换
-          sed -i "s/${OLD_PACKAGE1}/${NEW_PACKAGE}/g" build.gradle.kts
-          sed -i "s/namespace = .*/namespace = \"${NEW_PACKAGE}\"/" app/build.gradle.kts
-          sed -i "s/namespace = .*/namespace = \"${NEW_PACKAGE}\"/" common/build.gradle.kts
+          # 1. 配置文件
+          sed -i "s/$OLD1/$NEW/g" build.gradle.kts
+          sed -i "s/namespace = .*/namespace = \"$NEW\"/" app/build.gradle.kts
+          sed -i "s/namespace = .*/namespace = \"$NEW\"/" common/build.gradle.kts
           
-          # 2. 代码语法层替换
-          find app/src/main/java common/src/main/java -name "*.kt" | xargs sed -i "s/package ${OLD_PACKAGE1}/package ${NEW_PACKAGE}/g"
-          find app/src/main/java common/src/main/java -name "*.kt" | xargs sed -i "s/package ${OLD_PACKAGE2}/package ${NEW_PACKAGE}/g"
-          find app/src/main/java common/src/main/java -name "*.kt" | xargs sed -i "s/import ${OLD_PACKAGE1}/import ${NEW_PACKAGE}/g"
-          find app/src/main/java common/src/main/java -name "*.kt" | xargs sed -i "s/import ${OLD_PACKAGE2}/import ${NEW_PACKAGE}/g"
-          find app/src/main/java common/src/main/java -name "*.kt" | xargs sed -i "s/${OLD_PACKAGE1}\./${NEW_PACKAGE}\./g"
-          find app/src/main/java common/src/main/java -name "*.kt" | xargs sed -i "s/${OLD_PACKAGE2}\./${NEW_PACKAGE}\./g"
+          # 2. 代码文件
+          find app/src/main/java common/src/main/java -name "*.kt" | xargs sed -i "s/package $OLD1/package $NEW/g"
+          find app/src/main/java common/src/main/java -name "*.kt" | xargs sed -i "s/package $OLD2/package $NEW/g"
+          find app/src/main/java common/src/main/java -name "*.kt" | xargs sed -i "s/import $OLD1/import $NEW/g"
+          find app/src/main/java common/src/main/java -name "*.kt" | xargs sed -i "s/import $OLD2/import $NEW/g"
+          find app/src/main/java common/src/main/java -name "*.kt" | xargs sed -i "s/$OLD1\./$NEW\./g"
+          find app/src/main/java common/src/main/java -name "*.kt" | xargs sed -i "s/$OLD2\./$NEW\./g"
           
-          # 3. BuildConfig引用修复
-          find common/src/main/java -name "JsonConfig.kt" | xargs sed -i "s/import .*BuildConfig/import ${NEW_PACKAGE}.BuildConfig/g"
+          # 3. BuildConfig修复
+          find common/src/main/java -name "JsonConfig.kt" | xargs sed -i "s/import .*BuildConfig/import $NEW.BuildConfig/g"
           
-          # 4. 字符串/资源替换
-          find app/src main common/src/main -name "*.kt" -o -name "*.xml" | xargs sed -i "s/\"${OLD_PACKAGE1}\"/\"${NEW_PACKAGE}\"/g"
-          find app/src main common/src/main -name "*.kt" -o -name "*.xml" | xargs sed -i "s/\"${OLD_PACKAGE2}\"/\"${NEW_PACKAGE}\"/g"
-          find app/src main common/src/main -name "AndroidManifest.xml" | xargs sed -i "s/package=\"${OLD_PACKAGE1}\"/package=\"${NEW_PACKAGE}\"/g"
+          # 4. 资源文件
+          find app/src common/src/main -name "*.xml" | xargs sed -i "s/$OLD1/$NEW/g"
+          find app/src common/src/main -name "AndroidManifest.xml" | xargs sed -i "s/package=\"$OLD1\"/package=\"$NEW\"/g"
           
-          # 5. 应用名称替换
-          sed -i 's/<string name="app_name" translatable="false">HMA-OSS<\/string>/<string name="app_name" translatable="false">听书神器<\/string>/' app/src/main/res/values/strings.xml
+          # 5. 应用名称
+          sed -i 's/HMA-OSS/听书神器/g' app/src/main/res/values/strings.xml
 
       - name: 构建APK
         run: |
@@ -57,5 +56,5 @@ jobs:
       - name: 上传产物
         uses: actions/upload-artifact@v4
         with:
-          name: 修复版APK
+          name: 最终可用APK
           path: app/build/outputs/apk/release/*.apk
