@@ -1,4 +1,4 @@
-name: 最小变动改包名（最终版）
+name: 最小变动改包名（语法修正版）
 on: workflow_dispatch
 jobs:
   build-release-apk:
@@ -19,21 +19,21 @@ jobs:
       - name: 生成local.properties
         run: echo "sdk.dir=/usr/local/lib/android/sdk" > local.properties
 
-      - name: 核心配置（仅改3处，无多余变动）
+      - name: 核心配置（语法修正）
         run: |
           OLD="org.frknkrc44.hma_oss"
           NEW="com.shipook.reader.mfxsdq"
           
-          # 1. 改所有模块的实际包名
+          # 1. 改实际包名
           sed -i "s/namespace = .*/namespace = \"$NEW\"/" app/build.gradle.kts
           sed -i "s/namespace = .*/namespace = \"$NEW\"/" common/build.gradle.kts
           sed -i "s/namespace = .*/namespace = \"$NEW\"/" xposed/build.gradle.kts
           
-          # 2. 加编译映射（不用改代码，自动适配引用）
-          sed -i "/android {/a \    sourceSets.main.java.rename('$OLD', '$NEW')" app/build.gradle.kts
-          sed -i "/android {/a \    sourceSets.main.java.rename('icu/nullptr/hidemyapplist', '$NEW')" common/build.gradle.kts
+          # 2. 加编译映射（标准Kotlin DSL写法）
+          sed -i "/android {/a \    sourceSets {\n        main {\n            java {\n                rename(\"$OLD\", \"$NEW\")\n            }\n        }\n    }" app/build.gradle.kts
+          sed -i "/android {/a \    sourceSets {\n        main {\n            java {\n                rename(\"icu/nullptr/hidemyapplist\", \"$NEW\")\n            }\n        }\n    }" common/build.gradle.kts
           
-          # 3. 改资源文件的包名和应用名
+          # 3. 改资源文件
           find . -name "AndroidManifest.xml" -exec sed -i "s/package=\"$OLD\"/package=\"$NEW\"/g" {} \;
           sed -i 's/HMA-OSS/听书神器/g' app/src/main/res/values/strings.xml
 
