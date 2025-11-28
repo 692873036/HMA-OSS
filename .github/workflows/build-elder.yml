@@ -7,23 +7,23 @@ jobs:
   modify_apk:
     runs-on: ubuntu-latest
     steps:
-      # 步骤1：安装工具（仅保留必要组件）
+      # 步骤1：安装工具
       - name: 安装依赖工具
         run: |
           sudo apt-get update
           sudo apt-get install -y apktool zipalign wget
 
-      # 步骤2：配置JDK（提供keytool）
+      # 步骤2：配置JDK
       - name: 配置Java环境
         uses: actions/setup-java@v4
         with:
           java-version: '21'
           distribution: 'temurin'
 
-      # 步骤3：下载目标APK
+      # 步骤3：下载目标APK（使用新链接）
       - name: 下载待修改APK
         run: |
-          wget "https://release-assets.githubusercontent.com/github-production-release-asset/1051338971/3d9bff3d-2ee1-4bc1-8e53-b8f79855cd41?sp=r&sv=2018-11-09&sr=b&spr=https&se=2025-11-28T17%3A45%3A49Z&rscd=attachment%3B+filename%3DHMA-OSS-oss-130-release.apk&rsct=application%2Fvnd.android.package-archive&skoid=96c2d410-5711-43a1-aedd-ab1947aa7ab0&sktid=398a6654-997b-47e9-b12b-9515b896b4de&skt=2025-11-28T16%3A45%3A30Z&ske=2025-11-28T17%3A45%3A49Z&sks=b&skv=2018-11-09&sig=MdBGmtn4y%2BX0r3DTbgqfYIh0HWhBBG7W6APrteojYkY%3D&jwt=eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJpc3MiOiJnaXRodWIuY29tIiwiYXVkIjoicicmVsZWFzZS1hc3NldHMuZ2l0aHVidXNlcmNvbnRlbnQuY29tIiwia2V5Ijoia2V5MSIsImV4cCI6MTc2NDM0OTIzOCwibmJmIjoxNzY0MzQ4OTM4LCJwYXRoIjoicmVsZWFzZWFzc2V0cHJvZHVjdGlvbi5ibG9iLmNvcmUud2luZG93cy5uZXQifQ.0ccIbA7YP20wrgOCjouwSEFloKn2y2UrtYvfxpZJGwE&response-content-disposition=attachment%3B%20filename%3DHMA-OSS-oss-130-release.apk&response-content-type=application%2Fvnd.android.package-archive" -O target.apk
+          wget "https://github.com/frknkrc44/HMA-OSS/releases/download/oss-130/HMA-OSS-oss-130-release.apk" -O target.apk
 
       # 步骤4：解包APK
       - name: 解包APK
@@ -41,11 +41,8 @@ jobs:
       # 步骤7：签名并对齐APK
       - name: 签名APK
         run: |
-          # 使用JDK内置keytool生成密钥
           keytool -genkey -v -keystore sign.keystore -alias sign_alias -storepass 123456 -keypass 123456 -dname "CN=Sign, OU=Sign, O=Sign, L=Sign, S=Sign, C=CN"
-          # 签名APK
           jarsigner -sigalg SHA256withRSA -digestalg SHA-256 -keystore sign.keystore modified_unsigned.apk sign_alias -storepass 123456
-          # 对齐APK
           zipalign -f 4 modified_unsigned.apk final.apk
 
       # 步骤8：上传结果
