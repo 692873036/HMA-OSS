@@ -1,4 +1,4 @@
-name: 手动构建听书神器（master分支）
+name: 手动构建听书神器（正确配置版）
 on: workflow_dispatch
 jobs:
   build-apk:
@@ -7,8 +7,8 @@ jobs:
       - name: 拉取frknkrc44/HMA-OSS仓库master分支
         uses: actions/checkout@v4
         with:
-          repository: frknkrc44/HMA-OSS
-          ref: master
+          repository: frknkrc44/HMA-OSS # 修正为目标仓库地址
+          ref: master # 使用实际存在的默认分支
 
       - name: 配置JDK 21
         uses: actions/setup-java@v4
@@ -17,17 +17,19 @@ jobs:
           distribution: 'temurin'
           cache: 'gradle'
 
-      - name: 生成local.properties
+      - name: 生成local.properties（解决Android SDK路径依赖）
         run: echo "sdk.dir=/usr/local/lib/android/sdk" > local.properties
 
       - name: 修改包名与应用名称
         run: |
-          # 替换原包名为目标包名
+          # 将包名改为目标包名com.shipook.reader.mfxsdq
           sed -i 's/applicationId = ".*"/applicationId = "com.shipook.reader.mfxsdq"/' app/build.gradle.kts
+          # 修改AndroidManifest.xml中的包名
           sed -i 's/package=".*"/package="com.shipook.reader.mfxsdq"/' app/src/main/AndroidManifest.xml
+          # 修改应用名为“听书神器”
           sed -i 's/<string name="app_name">.*<\/string>/<string name="app_name">听书神器<\/string>/' app/src/main/res/values/strings.xml
 
-      - name: 构建APK
+      - name: 授权并构建Debug APK
         run: |
           chmod +x ./gradlew
           ./gradlew assembleDebug --no-daemon
@@ -35,6 +37,6 @@ jobs:
       - name: 上传APK产物
         uses: actions/upload-artifact@v4
         with:
-          name: 听书神器APK
+          name: 听书神器-DEBUG版
           path: app/build/outputs/apk/debug/*.apk
           retention-days: 30
