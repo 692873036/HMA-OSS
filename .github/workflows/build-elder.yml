@@ -1,8 +1,8 @@
-name: 自动构建+去签名校验+改包名（修复版）
+name: 自动构建+改包名（简化修复版）
 on:
   push:
-    branches: [master]  # 代码推送自动触发
-  workflow_dispatch:  # 保留手动触发
+    branches: [master]
+  workflow_dispatch:
 
 jobs:
   auto-process-apk:
@@ -32,30 +32,23 @@ jobs:
         env:
           ANDROID_HOME: /usr/local/lib/android/sdk
 
-      - name: 安装依赖工具（修复smali下载）
+      - name: 安装依赖工具（修复smali链接）
         run: |
           sudo apt-get update
           sudo apt-get install -y apktool zipalign
-          # 拉取最新版smali/baksmali（自动适配版本）
-          wget https://github.com/JesusFreke/smali/releases/latest/download/smali.jar -O smali.jar
-          wget https://github.com/JesusFreke/smali/releases/latest/download/baksmali.jar -O baksmali.jar
+          # 使用固定版本的smali/baksmali（2025年11月有效）
+          wget https://github.com/JesusFreke/smali/releases/download/v2.5.2/smali-2.5.2.jar -O smali.jar
+          wget https://github.com/JesusFreke/smali/releases/download/v2.5.2/baksmali-2.5.2.jar -O baksmali.jar
 
-      - name: 解包+去签名校验+改包名
+      - name: 解包+改包名
         run: |
           APK_PATH="app/build/outputs/apk/release/app-release.apk"
           TEMP_DIR="temp_apk"
-          DEX_DIR="dex_process"
           NEW_PACKAGE="com.shipook.reader.mfxsdq"
           NEW_APP_NAME="听书神器"
           
           # 解包APK
           apktool d "$APK_PATH" -o "$TEMP_DIR" --force
-          
-          # 反编译Dex，去除签名校验
-          java -jar baksmali.jar d "$TEMP_DIR/classes.dex" -o "$DEX_DIR"
-          find "$DEX_DIR" -name "*.smali" -type f | xargs sed -i 's/const-string v[0-9], "GET_SIGNATURES"/const v[0-9], 0x0/g'
-          find "$DEX_DIR" -name "*.smali" -type f | xargs sed -i 's/invoke-virtual {.*, Landroid/content/pm/PackageManager;->getPackageInfo/invoke-virtual {.*, Landroid/content/pm/PackageManager;->getApplicationInfo/g'
-          java -jar smali.jar a "$DEX_DIR" -o "$TEMP_DIR/classes.dex"
           
           # 修改包名+应用名
           sed -i "s/package=\".*\"/package=\"$NEW_PACKAGE\"/g" "$TEMP_DIR/AndroidManifest.xml"
