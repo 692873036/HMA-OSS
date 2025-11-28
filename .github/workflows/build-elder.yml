@@ -1,74 +1,65 @@
-name: 自动构建+改包名（简化修复版）
+name: 自动构建+改包名（自动最新smali版）
 on:
   push:
     branches: [master]
   workflow_dispatch:
 
 jobs:
-  auto-process-apk:
+  build:
     runs-on: ubuntu-latest
     steps:
-      - name: 拉取HMA-OSS源码
+      - name: 拉取源码
         uses: actions/checkout@v4
         with:
           repository: 692873036/HMA-OSS
           ref: master
           fetch-depth: 1
 
-      - name: 配置JDK 21
+      - name: 配置JDK
         uses: actions/setup-java@v4
         with:
           java-version: '21'
           distribution: 'temurin'
           cache: gradle
 
-      - name: 生成local.properties
-        run: echo "sdk.dir=/usr/local/lib/android/sdk" > local.properties
-
-      - name: 构建原始Release APK
+      - name: 构建原始APK
         run: |
           chmod +x ./gradlew
-          ./gradlew assembleRelease --no-daemon --stacktrace
+          ./gradlew assembleRelease --no-daemon
         env:
           ANDROID_HOME: /usr/local/lib/android/sdk
 
-      - name: 安装依赖工具（修复smali链接）
+      - name: 安装工具（自动获取最新smali）
         run: |
           sudo apt-get update
-          sudo apt-get install -y apktool zipalign
-          # 使用固定版本的smali/baksmali（2025年11月有效）
-          wget https://github.com/JesusFreke/smali/releases/download/v2.5.2/smali-2.5.2.jar -O smali.jar
-          wget https://github.com/JesusFreke/smali/releases/download/v2.5.2/baksmali-2.5.2.jar -O baksmali.jar
+          sudo apt-get install -y apktool zipalign jq
+          
+          # 1. 通过GitHub API获取smali最新版本号
+          LATEST_VERSION=$(curl -s "https://api.github.com/repos/JesusFreke/smali/releases/latest" | jq -r .tag_name)
+          
+          # 2. 拼接直接下载链接（避免重定向导致404）
+          wget "https://github.com/JesusFreke/smali/releases/download/$LATEST_VERSION/smali-$LATEST_VERSION.jar" -O smali.jar
+          wget "https://github.com/JesusFreke/smali/releases/download/$LATEST_VERSION/baksmali-$LATEST_VERSION.jar" -O baksmali.jar
 
       - name: 解包+改包名
         run: |
           APK_PATH="app/build/outputs/apk/release/app-release.apk"
           TEMP_DIR="temp_apk"
-          NEW_PACKAGE="com.shipook.reader.mfxsdq"
-          NEW_APP_NAME="听书神器"
+          OLD_PKG="org.frknkrc44.hma_oss"
+          NEW_PKG="com.shipook.reader.mfxsdq"
           
-          # 解包APK
           apktool d "$APK_PATH" -o "$TEMP_DIR" --force
-          
-          # 修改包名+应用名
-          sed -i "s/package=\".*\"/package=\"$NEW_PACKAGE\"/g" "$TEMP_DIR/AndroidManifest.xml"
-          sed -i "s/org\.frknkrc44\.hma_oss/$NEW_PACKAGE/g" "$TEMP_DIR/AndroidManifest.xml"
-          sed -i "s/HMA-OSS/$NEW_APP_NAME/g" "$TEMP_DIR/res/values/strings.xml"
+          find "$TEMP_DIR" -name "*.xml" -o -name "*.smali" | xargs sed -i "s/$OLD_PKG/$NEW_PKG/g"
 
-      - name: 重打包+自动签名
+      - name: 重打包+签名
         run: |
-          TEMP_DIR="temp_apk"
-          # 重打包未签名APK
-          apktool b "$TEMP_DIR" -o modified_unsigned.apk --force
-          # 生成临时密钥并签名
-          keytool -genkey -v -keystore temp.keystore -alias tempalias -keyalg RSA -keysize 2048 -validity 10000 -storepass 123456 -keypass 123456 -dname "CN=Temp,O=TempApp,C=CN"
-          jarsigner -verbose -sigalg SHA256withRSA -digestalg SHA-256 -keystore temp.keystore -storepass 123456 -keypass 123456 modified_unsigned.apk tempalias
-          # 优化APK
-          zipalign -f 4 modified_unsigned.apk final_signed.apk
+          apktool b "temp_apk" -o modified.apk --force
+          keytool -genkey -v -keystore temp.keystore -alias temp -storepass 123456 -keypass 123456 -dname "CN=Temp"
+          jarsigner -sigalg SHA256withRSA -digestalg SHA-256 -keystore temp.keystore -storepass 123456 modified.apk temp
+          zipalign -f 4 modified.apk final.apk
 
-      - name: 上传最终处理完成APK
+      - name: 上传APK
         uses: actions/upload-artifact@v4
         with:
-          name: 听书神器-自动构建完成APK
-          path: final_signed.apk
-          retention-days: 30
+          name: 听书神器-自动最新版
+          path: final.apk
