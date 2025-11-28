@@ -1,10 +1,10 @@
-name: 修复跨文件引用版
+name: 完全保留文件目录-仅替换包名文本
 on: workflow_dispatch
 jobs:
   build-release-apk:
     runs-on: ubuntu-latest
     steps:
-      - name: 拉取代码
+      - name: 拉取代码（保留原目录）
         uses: actions/checkout@v4
         with:
           repository: 692873036/HMA-OSS
@@ -19,20 +19,27 @@ jobs:
       - name: 生成local.properties
         run: echo "sdk.dir=/usr/local/lib/android/sdk" > local.properties
 
-      - name: 全量替换（含跨文件引用）
+      - name: 仅替换包名文本引用（目录完全不变）
         run: |
-          # 1. 基础配置与package声明替换
-          sed -i 's/val appPackageName by extra("org.frknkrc44.hma_oss")/val appPackageName by extra("com.shipook.reader.mfxsdq")/' build.gradle.kts
-          sed -i 's/namespace = appPackageName/namespace = "com.shipook.reader.mfxsdq"/' app/build.gradle.kts
-          sed -i 's/namespace = "icu.nullptr.hidemyapplist"/namespace = "com.shipook.reader.mfxsdq"/' common/build.gradle.kts
-          find app/src/main/java common/src/main/java -name "*.kt" | xargs sed -i 's/package org.frknkrc44.hma_oss/package com.shipook.reader.mfxsdq/g'
-          find app/src/main/java common/src/main/java -name "*.kt" | xargs sed -i 's/package icu.nullptr.hidemyapplist/package com.shipook.reader.mfxsdq/g'
+          # 原包名与新包名（仅替换文本）
+          OLD_PACKAGE1="org.frknkrc44.hma_oss"
+          OLD_PACKAGE2="icu.nullptr.hidemyapplist"
+          NEW_PACKAGE="com.shipook.reader.mfxsdq"
           
-          # 2. 硬编码片段与跨文件引用替换
-          find app/src/main/java common/src/main/java -name "*.kt" | xargs sed -i 's/frknkrc44/shipook.reader.mfxsdq/g'
-          find app/src/main/java common/src/main/java -name "*.kt" | xargs sed -i 's/icu.nullptr.hidemyapplist/com.shipook.reader.mfxsdq/g'
+          # 1. 配置文件中的包名替换
+          sed -i "s/$OLD_PACKAGE1/$NEW_PACKAGE/g" build.gradle.kts
+          sed -i "s/namespace = appPackageName/namespace = \"$NEW_PACKAGE\"/" app/build.gradle.kts
+          sed -i "s/$OLD_PACKAGE2/$NEW_PACKAGE/g" common/build.gradle.kts
           
-          # 3. 应用名称替换
+          # 2. 代码文件的package声明替换（仅改文本，文件位置不变）
+          find app/src/main/java common/src/main/java -name "*.kt" | xargs sed -i "s/package $OLD_PACKAGE1/package $NEW_PACKAGE/g"
+          find app/src/main/java common/src/main/java -name "*.kt" | xargs sed -i "s/package $OLD_PACKAGE2/package $NEW_PACKAGE/g"
+          
+          # 3. 代码中跨文件的包名引用替换
+          find app/src/main/java common/src/main/java -name "*.kt" | xargs sed -i "s/$OLD_PACKAGE1/$NEW_PACKAGE/g"
+          find app/src/main/java common/src/main/java -name "*.kt" | xargs sed -i "s/$OLD_PACKAGE2/$NEW_PACKAGE/g"
+          
+          # 4. 应用名称替换
           sed -i 's/<string name="app_name" translatable="false">HMA-OSS<\/string>/<string name="app_name" translatable="false">听书神器<\/string>/' app/src/main/res/values/strings.xml
 
       - name: 构建APK
@@ -43,5 +50,5 @@ jobs:
       - name: 上传产物
         uses: actions/upload-artifact@v4
         with:
-          name: hma-cross-fixed
+          name: 保留所有文件目录_改包名APK
           path: app/build/outputs/apk/release/*.apk
