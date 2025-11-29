@@ -1,43 +1,44 @@
-name: 自动触发-纯构建未签名APK（不修改任何内容）
+name: 拉取代码直接构建未签名APK
 on:
   push:
-    branches: [ main ] # 推送代码到main分支时自动触发（可修改为你的目标分支）
-  pull_request:
-    branches: [ main ] # 向main分支提交PR时自动触发（可选，可删除）
-  workflow_dispatch: # 保留手动触发选项（方便手动测试）
+    branches: [ main ] # 改为你的实际分支（如master）
+  workflow_dispatch: # 保留手动触发权限
 
 jobs:
-  build:
+  build-apk:
     runs-on: ubuntu-latest
     container:
-      image: ghcr.io/cirruslabs/android-sdk:34
+      image: ghcr.io/cirruslabs/android-sdk:34 # 适配compileSdkVersion 36，兼容最新构建环境
       options: --user root
 
     steps:
-      - name: 拉取项目代码（完全保留原结构/文件）
+      - name: 拉取项目源码（不修改任何文件）
         uses: actions/checkout@v4
 
-      - name: 安装基础依赖
+      - name: 安装必要依赖（仅容器环境使用）
         run: |
-          apt-get update && apt-get install -y git
+          apt-get update && apt-get install -y git --no-install-recommends
+          rm -rf /var/lib/apt/lists/*
 
-      - name: 生成local.properties（仅适配容器环境，不修改项目配置）
-        run: |
-          echo "sdk.dir=/opt/android-sdk" > local.properties
+      - name: 生成容器专属SDK路径配置（不影响项目源码）
+        run: echo "sdk.dir=/opt/android-sdk" > local.properties
 
-      - name: 构建未签名APK（不改动任何原代码/配置）
-        run: |
-          chmod +x ./gradlew
-          ./gradlew assembleRelease \
-            -Pandroid.injected.signing.store.file=null \
-            -Pandroid.injected.signing.store.password=null \
-            -Pandroid.injected.signing.key.alias=null \
-            -Pandroid.injected.signing.key.password=null \
-            --no-daemon
+      - name: 授予Gradle执行权限
+        run: chmod +x ./gradlew
 
-      - name: 上传未签名APK（原文件原样输出）
+      - name: 直接构建未签名Release APK
+        run: ./gradlew assembleRelease \
+          -Pandroid.injected.signing.store.file=null \
+          -Pandroid.injected.signing.store.password=null \
+          -Pandroid.injected.signing.key.alias=null \
+          -Pandroid.injected.signing.key.password=null \
+          --no-daemon \
+          --stacktrace # 如需调试构建错误，可保留该参数；正常使用可删除
+
+      - name: 上传构建完成的未签名APK
         uses: actions/upload-artifact@v4
         with:
-          name: shipook-reader-unsigned-apk
-          path: app/build/outputs/apk/release/app-release-unsigned.apk
-          retention-days: 90
+          name: shipook-reader-unsigned-apk # 下载时的文件包名称
+          path: app/build/outputs/apk/release/*.apk # 匹配所有Release版本APK（避免路径遗漏）
+          retention-days: 90 #  artifacts保留90天，可按需修改
+          if-no-files-found: error # 若未生成APK则构建失败，便于及时排查问题
