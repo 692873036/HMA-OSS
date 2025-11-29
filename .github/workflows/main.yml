@@ -1,5 +1,5 @@
 name: 基于源码改包名+构建未签名APK
-on: [push, workflow_dispatch]
+on: [, workflow_dispatch]
 jobs:
   build:
     runs-on: ubuntu-latest
