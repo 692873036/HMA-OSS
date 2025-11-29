@@ -1,60 +1,46 @@
-name: APatch改包名自动流程（最终修复版）
+name: 基于仓库APK改包名（无额外下载）
 on: [push, workflow_dispatch]
 jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-      - name: 安装依赖工具
-        run: sudo apt-get update && sudo apt-get install -y apktool zipalign wget openjdk-21-jdk
+      - name: 拉取代码仓库（获取已有APK）
+        uses: actions/checkout@v4
 
-      - name: 配置Java环境
-        uses: actions/setup-java@v4
-        with:
-          java-version: '21'
-          distribution: 'temurin'
-
-      - name: 下载原始APK
-        run: wget --timeout=30 "https://github.com/frknkrc44/HMA-OSS/releases/download/oss-130/HMA-OSS-oss-130-release.apk" -O t.apk
-
-      - name: 反编译APK
-        run: apktool d t.apk -o temp
-
-      - name: 批量替换包名
+      - name: 定义路径（请替换为你仓库中APK的实际路径）
         run: |
-          # 替换包名文本
-          find temp -type f \( -name "*.smali" -o -name "*.xml" -o -name "AndroidManifest.xml" \) | xargs sed -i "s/org\.frknkrc44\.hma_oss/com\.shipook\.reader\.mfxsdq/g"
-          # 替换smali类路径
-          find temp/smali -name "*.smali" | xargs sed -i "s/Lorg\/frknkrc44\/hma_oss/Lcom\/shipook\/reader\/mfxsdq/g"
-          # 调整smali目录结构
-          ORIGIN_DIR="temp/smali/org/frknkrc44/hma_oss"
-          TARGET_DIR="temp/smali/com/shipook/reader/mfxsdq"
-          mkdir -p $(dirname $TARGET_DIR)
-          mv $ORIGIN_DIR $TARGET_DIR
-          # 修复目录权限
-          chmod -R 755 temp/smali
+          echo "APK_PATH=app/release/audiobook.apk" >> $GITHUB_ENV  # 替换为你仓库里的APK路径
+          echo "TEMP_DIR=temp" >> $GITHUB_ENV
 
-      - name: 修复资源文件名（移除$符号）
+      - name: 解压APK提取Manifest
         run: |
-          # 重命名含$的资源文件（替换为下划线）
-          find temp/res/drawable* -name "*\$*" | while read file; do
-            new_file=$(echo "$file" | tr '$' '_')
-            mv "$file" "$new_file"
-          done
-          # 同步修改xml中的资源引用
-          find temp/res -name "*.xml" | xargs sed -i "s/\$/\_/g"
+          mkdir ${{ env.TEMP_DIR }}
+          unzip ${{ env.APK_PATH }} AndroidManifest.xml -d ${{ env.TEMP_DIR }}
 
-      - name: 重编译APK
-        run: apktool b temp -o m.apk --use-aapt2
+      - name: 安装Manifest格式转换工具
+        run: sudo apt-get update && sudo apt-get install -y axml2xml
 
-      - name: 签名APK
+      - name: 二进制Manifest转文本
+        run: axml2xml ${{ env.TEMP_DIR }}/AndroidManifest.xml ${{ env.TEMP_DIR }}/AndroidManifest.txt
+
+      - name: 修改包名（核心操作）
         run: |
-          keytool -genkeypair -keystore k.keystore -alias a -storepass 123456 -keypass 123456 -dname "CN=A" -keyalg RSA -keysize 2048 -validity 3650
-          jarsigner -keystore k.keystore -storepass 123456 -keypass 123456 -sigalg SHA256withRSA -digestalg SHA-256 m.apk a
-          zipalign -f 4 m.apk f.apk
+          # 替换根包名（原包名请替换为你APK的实际包名）
+          sed -i "s/package=\"com\.xxx\.audiobook\"/package=\"com\.shipook\.reader\.mfxsdq\"/g" ${{ env.TEMP_DIR }}/AndroidManifest.txt
+          # 替换权限、组件中的包名前缀
+          sed -i "s/com\.xxx\.audiobook\./com\.shipook\.reader\.mfxsdq\./g" ${{ env.TEMP_DIR }}/AndroidManifest.txt
 
-      - name: 上传成品APK
+      - name: 文本Manifest转回二进制
+        run: xml2axml ${{ env.TEMP_DIR }}/AndroidManifest.txt ${{ env.TEMP_DIR }}/AndroidManifest.xml
+
+      - name: 替换APK中的Manifest（生成未签名APK）
+        run: |
+          zip ${{ env.APK_PATH }} ${{ env.TEMP_DIR }}/AndroidManifest.xml
+          mv ${{ env.APK_PATH }} final_unsigend.apk
+
+      - name: 上传未签名APK
         uses: actions/upload-artifact@v4
         with:
-          name: patched-renamed-apk
-          path: f.apk
+          name: unsigend-renamed-apk
+          path: final_unsigend.apk
           retention-days: 90
