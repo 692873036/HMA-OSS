@@ -1,10 +1,10 @@
-name: 按指定修改点构建未签名APK
+name: 修复目录冲突后构建未签名APK
 on: [push, workflow_dispatch]
 jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-      - name: 拉取项目代码（含你修改后的Manifest）
+      - name: 拉取项目代码
         uses: actions/checkout@v4
 
       - name: 配置Java环境
@@ -13,25 +13,31 @@ jobs:
           java-version: '17'
           distribution: 'temurin'
 
-      - name: 自动配置Android SDK（仅安装必需依赖）
+      - name: 正确配置Android SDK（解决目录冲突）
         run: |
-          wget https://dl.google.com/android/repository/commandlinetools-linux-10406996_latest.zip -O sdk.zip
-          unzip -q sdk.zip -d android-sdk && rm sdk.zip
-          mkdir -p android-sdk/cmdline-tools/latest
-          mv android-sdk/cmdline-tools/* android-sdk/cmdline-tools/latest/
+          # 下载SDK
+          wget --timeout=60 --tries=3 https://dl.google.com/android/repository/commandlinetools-linux-10406996_latest.zip -O sdk.zip
+          unzip -q sdk.zip -d android-sdk-temp
+          rm sdk.zip
+          
+          # 正确创建目录结构（避免重复）
+          mkdir -p android-sdk/cmdline-tools
+          mv android-sdk-temp/cmdline-tools android-sdk/cmdline-tools/latest
+          
+          # 配置环境变量
           echo "ANDROID_HOME=$GITHUB_WORKSPACE/android-sdk" >> $GITHUB_ENV
           echo "PATH=$PATH:$ANDROID_HOME/cmdline-tools/latest/bin:$ANDROID_HOME/platform-tools" >> $GITHUB_ENV
+          
+          # 安装依赖
           yes | sdkmanager --licenses
           sdkmanager "platform-tools" "platforms;android-36" "build-tools;36.0.0"
 
-      - name: 仅同步build.gradle的applicationId（按你的Manifest包名）
+      - name: 同步build.gradle的applicationId
         run: |
-          # 读取你Manifest中已设置的包名：com.shipook.reader.mfxsdq
           TARGET_PACKAGE=$(grep -m1 'package="' app/src/main/AndroidManifest.xml | sed 's/.*package="\([^"]*\)".*/\1/')
-          # 仅修改applicationId，确保与Manifest一致（无其他额外修改）
           find . -name "build.gradle" -o -name "build.gradle.kts" | xargs sed -i "s/applicationId \".*\"/applicationId \"$TARGET_PACKAGE\"/g"
 
-      - name: 构建未签名APK（完全保留你的修改，不额外改动）
+      - name: 构建未签名APK
         run: |
           cd app
           chmod +x ./gradlew
@@ -40,7 +46,7 @@ jobs:
                                     -Pandroid.injected.signing.key.alias=null \
                                     -Pandroid.injected.signing.key.password=null
 
-      - name: 上传未签名APK（与你的修改完全一致）
+      - name: 上传未签名APK
         uses: actions/upload-artifact@v4
         with:
           name: shipook-reader-unsigned-apk
