@@ -11,9 +11,16 @@ jobs:
       - name: 拉取项目代码
         uses: actions/checkout@v4
 
+      - name: 安装Git并配置
+        run: |
+          # 安装Git工具
+          apt-get update && apt-get install -y git
+          # 配置Git用户信息（避免操作时的权限提示）
+          git config --global user.name "GitHub Actions"
+          git config --global user.email "actions@github.com"
+
       - name: 生成local.properties文件
         run: |
-          # 配置容器内Android SDK路径
           echo "sdk.dir=/opt/android-sdk" > local.properties
 
       - name: 同步build.gradle的applicationId
