@@ -1,46 +1,64 @@
-name: 基于仓库APK改包名（无额外下载）
+name: 基于源码改包名+构建未签名APK
 on: [push, workflow_dispatch]
 jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-      - name: 拉取代码仓库（获取已有APK）
+      - name: 拉取源代码仓库
         uses: actions/checkout@v4
 
-      - name: 定义路径（请替换为你仓库中APK的实际路径）
+      - name: 安装Android构建依赖
         run: |
-          echo "APK_PATH=app/release/audiobook.apk" >> $GITHUB_ENV  # 替换为你仓库里的APK路径
-          echo "TEMP_DIR=temp" >> $GITHUB_ENV
+          sudo apt-get update
+          sudo apt-get install -y openjdk-17-jdk git wget unzip gradle
+          # 下载Android SDK（精简版，仅含构建必需工具）
+          wget https://dl.google.com/android/repository/commandlinetools-linux-10406996_latest.zip -O sdk.zip
+          unzip -q sdk.zip -d android-sdk
+          rm sdk.zip
+          # 配置SDK环境变量
+          echo "ANDROID_HOME=$GITHUB_WORKSPACE/android-sdk" >> $GITHUB_ENV
+          echo "PATH=$PATH:$ANDROID_HOME/cmdline-tools/bin" >> $GITHUB_ENV
+          # 接受SDK许可协议
+          yes | sdkmanager --licenses
+          # 安装构建必需的SDK组件
+          sdkmanager "platform-tools" "platforms;android-36" "build-tools;36.0.0"
 
-      - name: 解压APK提取Manifest
+      - name: 核心配置（修改包名+适配构建）
         run: |
-          mkdir ${{ env.TEMP_DIR }}
-          unzip ${{ env.APK_PATH }} AndroidManifest.xml -d ${{ env.TEMP_DIR }}
+          # 定义原始包名和目标包名（请根据你的源码修改）
+          ORIGIN_PACKAGE="com.xxx.audiobook"  # 你的源码原始包名
+          TARGET_PACKAGE="com.shipook.reader.mfxsdq"  # 目标包名
+          
+          # 1. 修改AndroidManifest.xml中的包名
+          find . -name "AndroidManifest.xml" | xargs sed -i "s/package=\"$ORIGIN_PACKAGE\"/package=\"$TARGET_PACKAGE\"/g"
+          find . -name "AndroidManifest.xml" | xargs sed -i "s/$ORIGIN_PACKAGE\./$TARGET_PACKAGE\./g"
+          
+          # 2. 修改Java/Kotlin源码中的包名（目录结构+代码引用）
+          ORIGIN_DIR=$(echo $ORIGIN_PACKAGE | tr '.' '/')
+          TARGET_DIR=$(echo $TARGET_PACKAGE | tr '.' '/')
+          # 移动源码目录（适配包名）
+          mkdir -p app/src/main/java/$(dirname $TARGET_DIR)
+          mv app/src/main/java/$ORIGIN_DIR/* app/src/main/java/$TARGET_DIR/
+          # 替换代码中的包名引用
+          find app/src/main/java -name "*.java" -o -name "*.kt" | xargs sed -i "s/import $ORIGIN_PACKAGE/import $TARGET_PACKAGE/g"
+          find app/src/main/java -name "*.java" -o -name "*.kt" | xargs sed -i "s/$ORIGIN_PACKAGE\./$TARGET_PACKAGE\./g"
+          
+          # 3. 修改build.gradle中的应用ID（必改，否则构建包名不一致）
+          find . -name "build.gradle" -o -name "build.gradle.kts" | xargs sed -i "s/applicationId \"$ORIGIN_PACKAGE\"/applicationId \"$TARGET_PACKAGE\"/g"
 
-      - name: 安装Manifest格式转换工具
-        run: sudo apt-get update && sudo apt-get install -y axml2xml
-
-      - name: 二进制Manifest转文本
-        run: axml2xml ${{ env.TEMP_DIR }}/AndroidManifest.xml ${{ env.TEMP_DIR }}/AndroidManifest.txt
-
-      - name: 修改包名（核心操作）
+      - name: 构建未签名APK（禁用签名步骤）
         run: |
-          # 替换根包名（原包名请替换为你APK的实际包名）
-          sed -i "s/package=\"com\.xxx\.audiobook\"/package=\"com\.shipook\.reader\.mfxsdq\"/g" ${{ env.TEMP_DIR }}/AndroidManifest.txt
-          # 替换权限、组件中的包名前缀
-          sed -i "s/com\.xxx\.audiobook\./com\.shipook\.reader\.mfxsdq\./g" ${{ env.TEMP_DIR }}/AndroidManifest.txt
-
-      - name: 文本Manifest转回二进制
-        run: xml2axml ${{ env.TEMP_DIR }}/AndroidManifest.txt ${{ env.TEMP_DIR }}/AndroidManifest.xml
-
-      - name: 替换APK中的Manifest（生成未签名APK）
-        run: |
-          zip ${{ env.APK_PATH }} ${{ env.TEMP_DIR }}/AndroidManifest.xml
-          mv ${{ env.APK_PATH }} final_unsigend.apk
+          cd app  # 进入app模块目录（如果你的源码结构不同，需调整路径）
+          # 执行Gradle构建，生成未签名APK（位于 app/build/outputs/apk/release/ 目录）
+          gradle assembleRelease -Pandroid.injected.signing.store.file=null \
+                                 -Pandroid.injected.signing.store.password=null \
+                                 -Pandroid.injected.signing.key.alias=null \
+                                 -Pandroid.injected.signing.key.password=null
 
       - name: 上传未签名APK
         uses: actions/upload-artifact@v4
         with:
-          name: unsigend-renamed-apk
-          path: final_unsigend.apk
+          name: unsigned-source-built-apk
+          # 未签名APK的默认输出路径（根据你的源码结构调整）
+          path: app/build/outputs/apk/release/app-release-unsigned.apk
           retention-days: 90
