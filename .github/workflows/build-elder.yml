@@ -1,6 +1,10 @@
-name: 纯构建未签名APK（不修改任何原文件）
+name: 自动触发-纯构建未签名APK（不修改任何内容）
 on:
-  workflow_dispatch: # 仅手动触发
+  push:
+    branches: [ main ] # 推送代码到main分支时自动触发（可修改为你的目标分支）
+  pull_request:
+    branches: [ main ] # 向main分支提交PR时自动触发（可选，可删除）
+  workflow_dispatch: # 保留手动触发选项（方便手动测试）
 
 jobs:
   build:
@@ -10,7 +14,7 @@ jobs:
       options: --user root
 
     steps:
-      - name: 拉取项目代码（完全保留原结构和文件）
+      - name: 拉取项目代码（完全保留原结构/文件）
         uses: actions/checkout@v4
 
       - name: 安装基础依赖
@@ -21,7 +25,7 @@ jobs:
         run: |
           echo "sdk.dir=/opt/android-sdk" > local.properties
 
-      - name: 构建未签名APK（不改动任何原代码/配置/结构）
+      - name: 构建未签名APK（不改动任何原代码/配置）
         run: |
           chmod +x ./gradlew
           ./gradlew assembleRelease \
