@@ -5,10 +5,16 @@ jobs:
     runs-on: ubuntu-latest
     container:
       image: ghcr.io/cirruslabs/android-sdk:34
-      
+      options: --user root
+
     steps:
       - name: 拉取项目代码
         uses: actions/checkout@v4
+
+      - name: 生成local.properties文件
+        run: |
+          # 配置容器内Android SDK路径
+          echo "sdk.dir=/opt/android-sdk" > local.properties
 
       - name: 同步build.gradle的applicationId
         run: |
@@ -17,7 +23,6 @@ jobs:
 
       - name: 构建未签名APK
         run: |
-          # 无需cd app，直接在项目根目录执行gradlew
           chmod +x ./gradlew
           ./gradlew assembleRelease -Pandroid.injected.signing.store.file=null \
                                     -Pandroid.injected.signing.store.password=null \
