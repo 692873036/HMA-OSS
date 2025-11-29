@@ -1,4 +1,4 @@
-name: 基于源码改包名+构建未签名APK（官方Android环境）
+name: 基于源码改包名+构建未签名APK（手动环境配置）
 on: [push, workflow_dispatch]
 jobs:
   build:
@@ -7,37 +7,57 @@ jobs:
       - name: 拉取源代码仓库
         uses: actions/checkout@v4
 
-      - name: 配置Android构建环境（官方动作，避免路径问题）
-        uses: actions/setup-android@v3
+      - name: 安装Java环境
+        uses: actions/setup-java@v4
         with:
-          api-level: 36
-          build-tools: 36.0.0
-          ndk: 25.1.8937393
+          java-version: '17'
+          distribution: 'temurin'
 
-      - name: 核心配置（修改包名）
+      - name: 手动配置Android SDK
+        run: |
+          # 下载SDK命令行工具
+          wget https://dl.google.com/android/repository/commandlinetools-linux-10406996_latest.zip -O sdk-tools.zip
+          unzip -q sdk-tools.zip -d android-sdk
+          rm sdk-tools.zip
+          
+          # 配置环境变量
+          echo "ANDROID_HOME=$GITHUB_WORKSPACE/android-sdk" >> $GITHUB_ENV
+          echo "PATH=$PATH:$ANDROID_HOME/cmdline-tools/bin:$ANDROID_HOME/platform-tools" >> $GITHUB_ENV
+          
+          # 创建cmdline-tools/latest目录（解决sdkmanager路径问题）
+          mkdir -p $ANDROID_HOME/cmdline-tools/latest
+          mv $ANDROID_HOME/cmdline-tools/* $ANDROID_HOME/cmdline-tools/latest/
+          
+          # 接受SDK许可协议
+          yes | sdkmanager --licenses
+          
+          # 安装构建依赖
+          sdkmanager "platform-tools" "platforms;android-36" "build-tools;36.0.0"
+
+      - name: 修改包名
         run: |
           ORIGIN_PACKAGE="com.xxx.audiobook"  # 替换为你的原始包名
           TARGET_PACKAGE="com.shipook.reader.mfxsdq"  # 目标包名
           
-          # 1. 修改AndroidManifest.xml
+          # 修改Manifest
           find . -name "AndroidManifest.xml" | xargs sed -i "s/package=\"$ORIGIN_PACKAGE\"/package=\"$TARGET_PACKAGE\"/g"
           find . -name "AndroidManifest.xml" | xargs sed -i "s/$ORIGIN_PACKAGE\./$TARGET_PACKAGE\./g"
           
-          # 2. 修改源码目录与引用
+          # 修改源码目录与引用
           ORIGIN_DIR=$(echo $ORIGIN_PACKAGE | tr '.' '/')
           TARGET_DIR=$(echo $TARGET_PACKAGE | tr '.' '/')
           mkdir -p app/src/main/java/$(dirname $TARGET_DIR)
           mv app/src/main/java/$ORIGIN_DIR/* app/src/main/java/$TARGET_DIR/
-          
           find app/src/main/java -name "*.java" -o -name "*.kt" | xargs sed -i "s/import $ORIGIN_PACKAGE/import $TARGET_PACKAGE/g"
           find app/src/main/java -name "*.java" -o -name "*.kt" | xargs sed -i "s/$ORIGIN_PACKAGE\./$TARGET_PACKAGE\./g"
           
-          # 3. 修改build.gradle的applicationId
+          # 修改build.gradle
           find . -name "build.gradle" -o -name "build.gradle.kts" | xargs sed -i "s/applicationId \"$ORIGIN_PACKAGE\"/applicationId \"$TARGET_PACKAGE\"/g"
 
       - name: 构建未签名APK
         run: |
           cd app
+          chmod +x ./gradlew
           ./gradlew assembleRelease -Pandroid.injected.signing.store.file=null \
                                     -Pandroid.injected.signing.store.password=null \
                                     -Pandroid.injected.signing.key.alias=null \
