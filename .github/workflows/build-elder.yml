@@ -8,7 +8,7 @@ jobs:
   force-build:
     runs-on: ubuntu-latest
     container:
-      image: android:34 # 更换为更兼容的官方Android容器
+      image: ghcr.io/cirruslabs/android-sdk:34 # 换回之前可用的镜像
       options: --user root
     continue-on-error: true
 
@@ -30,15 +30,10 @@ jobs:
           apt-get install -y git wget unzip || true
           rm -rf /var/lib/apt/lists/*
 
-      - name: 配置Android SDK（补充容器缺失的组件）
-        run: |
-          wget https://dl.google.com/android/repository/commandlinetools-linux-10406996_latest.zip
-          unzip commandlinetools-linux-10406996_latest.zip -d cmdline-tools
-          mkdir -p $ANDROID_HOME/cmdline-tools/latest
-          mv cmdline-tools/cmdline-tools/* $ANDROID_HOME/cmdline-tools/latest
-          echo "sdk.dir=$ANDROID_HOME" > local.properties
+      - name: 生成SDK配置
+        run: echo "sdk.dir=/opt/android-sdk" > local.properties
 
-      - name: 强制构建（带调试日志+跳过Git命令）
+      - name: 强制构建（带调试日志）
         run: ./gradlew assembleRelease \
           -Pandroid.injected.signing.store.file=null \
           -Pandroid.injected.signing.store.password=null \
