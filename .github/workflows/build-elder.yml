@@ -13,11 +13,16 @@ jobs:
     continue-on-error: true
 
     steps:
-      - name: 拉取源码
+      - name: 拉取源码（完整历史）
         uses: actions/checkout@v4
         with:
           submodules: 'recursive'
           fetch-depth: 0
+
+      - name: 配置Git身份
+        run: |
+          git config --global user.name "GitHub Actions"
+          git config --global user.email "actions@github.com"
 
       - name: 安装依赖
         run: |
@@ -29,15 +34,7 @@ jobs:
         run: echo "sdk.dir=/opt/android-sdk" > local.properties
 
       - name: 强制构建
-        run: ./gradlew assembleRelease \
-          -Pandroid.injected.signing.store.file=null \
-          -Pandroid.injected.signing.store.password=null \
-          -Pandroid.injected.signing.key.alias=null \
-          -Pandroid.injected.signing.key.password=null \
-          --no-daemon \
-          --ignore-failed-sources \
-          --continue \
-          --stacktrace
+        run: ./gradlew assembleRelease -Pandroid.injected.signing.store.file=null -Pandroid.injected.signing.store.password=null -Pandroid.injected.signing.key.alias=null -Pandroid.injected.signing.key.password=null --no-daemon --ignore-failed-sources --continue --stacktrace
 
       - name: 上传APK
         uses: actions/upload-artifact@v4
