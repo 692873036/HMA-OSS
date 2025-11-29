@@ -1,54 +1,9 @@
-name: 强制尝试构建未签名APK
-on:
-  push:
-    branches: [ master ]
-  workflow_dispatch:
-
-jobs:
-  force-build:
-    runs-on: ubuntu-latest
-    container:
-      image: ghcr.io/cirruslabs/android-sdk:34 # 换回之前可用的镜像
-      options: --user root
-    continue-on-error: true
-
-    steps:
-      - name: 拉取源码（完整历史）
-        uses: actions/checkout@v4
-        with:
-          submodules: 'recursive'
-          fetch-depth: 0
-
-      - name: 配置Git身份
-        run: |
-          git config --global user.name "GitHub Actions"
-          git config --global user.email "actions@github.com"
-
-      - name: 安装依赖
-        run: |
-          apt-get update || true
-          apt-get install -y git wget unzip || true
-          rm -rf /var/lib/apt/lists/*
-
-      - name: 生成SDK配置
-        run: echo "sdk.dir=/opt/android-sdk" > local.properties
-
-      - name: 强制构建（带调试日志）
-        run: ./gradlew assembleRelease \
-          -Pandroid.injected.signing.store.file=null \
-          -Pandroid.injected.signing.store.password=null \
-          -Pandroid.injected.signing.key.alias=null \
-          -Pandroid.injected.signing.key.password=null \
-          --no-daemon \
-          --ignore-failed-sources \
-          --continue \
-          --debug
-
-      - name: 上传APK
-        uses: actions/upload-artifact@v4
-        with:
-          name: shipook-reader-unsigned-apk
-          path: |
-            app/build/outputs/apk/release/*.apk
-            **/build/outputs/apk/**/*.apk
-          retention-days: 90
+- name: 强制构建（修正命令格式）
+  run: ./gradlew assembleRelease \
+    -Pandroid.injected.signing.store.file=null \
+    -Pandroid.injected.signing.store.password=null \
+    -Pandroid.injected.signing.key.alias=null \
+    -Pandroid.injected.signing.key.password=null \
+    --no-daemon \
+    --continue \
+    --debug
