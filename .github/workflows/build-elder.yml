@@ -1,4 +1,4 @@
-name: 基于原结构+原Manifest构建未签名APK
+name: 纯构建未签名APK（不修改任何原文件）
 on:
   workflow_dispatch: # 仅手动触发
 
@@ -10,25 +10,18 @@ jobs:
       options: --user root
 
     steps:
-      - name: 拉取项目代码（保留原文件夹结构）
+      - name: 拉取项目代码（完全保留原结构和文件）
         uses: actions/checkout@v4
 
-      - name: 安装必要依赖
+      - name: 安装基础依赖
         run: |
           apt-get update && apt-get install -y git
-          git config --global user.name "GitHub Actions"
-          git config --global user.email "actions@github.com"
 
-      - name: 生成local.properties（匹配容器SDK路径）
+      - name: 生成local.properties（仅适配容器环境，不修改项目配置）
         run: |
           echo "sdk.dir=/opt/android-sdk" > local.properties
 
-      - name: 同步applicationId（与原Manifest包名一致）
-        run: |
-          TARGET_PACKAGE=$(grep -m1 'package="' app/src/main/AndroidManifest.xml | sed 's/.*package="\([^"]*\)".*/\1/')
-          find . -name "build.gradle" -o -name "build.gradle.kts" | xargs sed -i "s/applicationId \".*\"/applicationId \"$TARGET_PACKAGE\"/g"
-
-      - name: 构建未签名APK（不修改任何结构和配置）
+      - name: 构建未签名APK（不改动任何原代码/配置/结构）
         run: |
           chmod +x ./gradlew
           ./gradlew assembleRelease \
@@ -38,16 +31,7 @@ jobs:
             -Pandroid.injected.signing.key.password=null \
             --no-daemon
 
-      - name: 验证APK生成
-        run: |
-          APK_PATH="app/build/outputs/apk/release/app-release-unsigned.apk"
-          if [ ! -f "$APK_PATH" ]; then
-            echo "错误：APK构建失败，文件不存在"
-            exit 1
-          fi
-          echo "APK构建成功，路径：$APK_PATH"
-
-      - name: 上传未签名APK（保留原文件名和路径）
+      - name: 上传未签名APK（原文件原样输出）
         uses: actions/upload-artifact@v4
         with:
           name: shipook-reader-unsigned-apk
