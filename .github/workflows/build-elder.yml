@@ -1,36 +1,15 @@
-name: 修复目录冲突后构建未签名APK
+name: 基于预配置Android环境构建未签名APK
 on: [push, workflow_dispatch]
 jobs:
   build:
     runs-on: ubuntu-latest
+    # 使用预安装Android SDK的镜像
+    container:
+      image: ghcr.io/cirruslabs/android-sdk:34
+      
     steps:
       - name: 拉取项目代码
         uses: actions/checkout@v4
-
-      - name: 配置Java环境
-        uses: actions/setup-java@v4
-        with:
-          java-version: '17'
-          distribution: 'temurin'
-
-      - name: 正确配置Android SDK（解决目录冲突）
-        run: |
-          # 下载SDK
-          wget --timeout=60 --tries=3 https://dl.google.com/android/repository/commandlinetools-linux-10406996_latest.zip -O sdk.zip
-          unzip -q sdk.zip -d android-sdk-temp
-          rm sdk.zip
-          
-          # 正确创建目录结构（避免重复）
-          mkdir -p android-sdk/cmdline-tools
-          mv android-sdk-temp/cmdline-tools android-sdk/cmdline-tools/latest
-          
-          # 配置环境变量
-          echo "ANDROID_HOME=$GITHUB_WORKSPACE/android-sdk" >> $GITHUB_ENV
-          echo "PATH=$PATH:$ANDROID_HOME/cmdline-tools/latest/bin:$ANDROID_HOME/platform-tools" >> $GITHUB_ENV
-          
-          # 安装依赖
-          yes | sdkmanager --licenses
-          sdkmanager "platform-tools" "platforms;android-36" "build-tools;36.0.0"
 
       - name: 同步build.gradle的applicationId
         run: |
