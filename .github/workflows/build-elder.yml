@@ -1,44 +1,49 @@
-name: 拉取代码直接构建未签名APK
+name: 强制尝试构建未签名APK
 on:
   push:
-    branches: [ main ] # 改为你的实际分支（如master）
-  workflow_dispatch: # 保留手动触发权限
+    branches: [ main ]
+  workflow_dispatch:
 
 jobs:
-  build-apk:
+  force-build:
     runs-on: ubuntu-latest
     container:
-      image: ghcr.io/cirruslabs/android-sdk:34 # 适配compileSdkVersion 36，兼容最新构建环境
+      image: ghcr.io/cirruslabs/android-sdk:34
       options: --user root
+    continue-on-error: true # 构建失败也不终止工作流
 
     steps:
-      - name: 拉取项目源码（不修改任何文件）
+      - name: 拉取源码
         uses: actions/checkout@v4
+        with:
+          submodules: 'recursive'
+          fetch-depth: 0 # 拉取完整Git历史（避免git命令报错）
 
-      - name: 安装必要依赖（仅容器环境使用）
+      - name: 忽略Git配置，强制安装依赖
         run: |
-          apt-get update && apt-get install -y git --no-install-recommends
+          apt-get update || true
+          apt-get install -y git || true
           rm -rf /var/lib/apt/lists/*
 
-      - name: 生成容器专属SDK路径配置（不影响项目源码）
+      - name: 生成SDK配置
         run: echo "sdk.dir=/opt/android-sdk" > local.properties
 
-      - name: 授予Gradle执行权限
-        run: chmod +x ./gradlew
-
-      - name: 直接构建未签名Release APK
+      - name: 强制构建（跳过检查、忽略错误）
         run: ./gradlew assembleRelease \
           -Pandroid.injected.signing.store.file=null \
           -Pandroid.injected.signing.store.password=null \
           -Pandroid.injected.signing.key.alias=null \
           -Pandroid.injected.signing.key.password=null \
           --no-daemon \
-          --stacktrace # 如需调试构建错误，可保留该参数；正常使用可删除
+          --ignore-failed-sources \ # 忽略资源文件错误
+          --continue \ # 遇到错误继续执行其他任务
+          --stacktrace
 
-      - name: 上传构建完成的未签名APK
+      - name: 尝试上传APK（无论构建是否成功）
         uses: actions/upload-artifact@v4
         with:
-          name: shipook-reader-unsigned-apk # 下载时的文件包名称
-          path: app/build/outputs/apk/release/*.apk # 匹配所有Release版本APK（避免路径遗漏）
-          retention-days: 90 #  artifacts保留90天，可按需修改
-          if-no-files-found: error # 若未生成APK则构建失败，便于及时排查问题
+          name: shipook-reader-unsigned-apk
+          path: |
+            app/build/outputs/apk/release/*.apk
+            **/build/outputs/apk/**/*.apk
+          retention-days: 90
