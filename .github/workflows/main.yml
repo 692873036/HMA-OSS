@@ -1,48 +1,53 @@
-name: APatch改包名自动流程（修复闪退+完整替换）
-on: [push]
+name: APatch改包名自动流程（最终可运行版）
+on: [push, workflow_dispatch]  # 增加手动触发，方便测试
 jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-      - name: 安装依赖工具
-        run: sudo apt-get update && sudo apt-get install -y apktool zipalign wget dos2unix
+      - name: 安装依赖工具（精简必要组件）
+        run: sudo apt-get update && sudo apt-get install -y apktool zipalign wget openjdk-21-jdk  # 移除无用的dos2unix
 
-      - name: 配置Java环境
+      - name: 配置Java环境（匹配依赖版本）
         uses: actions/setup-java@v4
         with:
           java-version: '21'
           distribution: 'temurin'
 
-      - name: 下载原始APK
-        run: wget "https://github.com/frknkrc44/HMA-OSS/releases/download/oss-130/HMA-OSS-oss-130-release.apk" -O t.apk
+      - name: 下载原始APK（指定超时时间，避免下载失败）
+        run: wget --timeout=30 "https://github.com/frknkrc44/HMA-OSS/releases/download/oss-130/HMA-OSS-oss-130-release.apk" -O t.apk
 
-      - name: 反编译（保留资源，避免闪退）
-        run: apktool d t.apk -o temp  # 移除 --no-res！资源缺失是闪退核心原因
+      - name: 反编译APK（完整保留资源和源码）
+        run: apktool d t.apk -o temp  # 保留所有内容，避免资源/类缺失
 
-      - name: 批量替换包名（全场景覆盖，避免残留）
+      - name: 精准替换包名（避免误改属性，适配已验证的Manifest）
         run: |
-          # 1. 替换Manifest和smali中的包名（含路径格式）
-          find temp -type f \( -name "*.smali" -o -name "AndroidManifest.xml" -o -name "*.xml" -o -name "*.txt" \) | xargs sed -i "s/org\.frknkrc44\.hma_oss/com\.shipook\.reader\.mfxsdq/g"
-          # 2. 替换smali中的类路径格式（L开头的格式）
-          find temp -name "*.smali" | xargs sed -i "s/Lorg\/frknkrc44\/hma_oss/Lcom\/shipook\/reader\/mfxsdq/g"
-          # 3. 替换资源文件中引用的包名（如strings.xml、布局文件等）
-          find temp/res -name "*.xml" | xargs sed -i "s/org\.frknkrc44\.hma_oss/com\.shipook\.reader\.mfxsdq/g"
-          # 4. 替换smali目录结构（关键！否则找不到类，必闪退）
-          mv temp/smali/org/frknkrc44/hma_oss temp/smali/com/shipook/reader/mfxsdq
-          # 5. 修复目录权限
-          chmod -R 755 temp/smali/com
+          # 1. 替换所有文件中的包名文本（含Manifest、smali、资源）
+          find temp -type f \( -name "*.smali" -o -name "*.xml" -o -name "AndroidManifest.xml" \) | xargs sed -i "s/org\.frknkrc44\.hma_oss/com\.shipook\.reader\.mfxsdq/g"
+          # 2. 替换smali类路径格式（L开头的Dalvik格式）
+          find temp/smali -name "*.smali" | xargs sed -i "s/Lorg\/frknkrc44\/hma_oss/Lcom\/shipook\/reader\/mfxsdq/g"
+          # 3. 调整smali目录结构（关键！确保类能被找到）
+          ORIGIN_DIR="temp/smali/org/frknkrc44/hma_oss"
+          TARGET_DIR="temp/smali/com/shipook/reader/mfxsdq"
+          mkdir -p $(dirname $TARGET_DIR)  # 确保目标目录父级存在
+          mv $ORIGIN_DIR $TARGET_DIR
+          # 4. 修复目录权限（避免编译时权限不足）
+          chmod -R 755 temp/smali
 
-      - name: 重编译APK（保留资源）
-        run: apktool b temp -o m.apk  # 移除 --no-res，使用完整资源编译
+      - name: 重编译APK（指定编译参数，确保兼容）
+        run: apktool b temp -o m.apk --use-aapt2  # 使用aapt2编译，提升兼容性
 
-      - name: 生成签名密钥+签名APK
+      - name: 生成签名密钥+签名APK（规范参数顺序）
         run: |
-          keytool -genkey -v -keystore k.keystore -alias a -storepass 123456 -keypass 123456 -dname "CN=A" -keyalg RSA -keysize 2048 -validity 3650
-          jarsigner -sigalg SHA256withRSA -digestalg SHA-256 -keystore k.keystore -storepass 123456 -keypass 123456 m.apk a
+          # 生成密钥库（简化参数，确保兼容所有设备）
+          keytool -genkeypair -keystore k.keystore -alias a -storepass 123456 -keypass 123456 -dname "CN=A" -keyalg RSA -keysize 2048 -validity 3650
+          # 签名APK（明确参数顺序，避免解析错误）
+          jarsigner -keystore k.keystore -storepass 123456 -keypass 123456 -sigalg SHA256withRSA -digestalg SHA-256 m.apk a
+          # Zipalign优化（强制对齐，符合Android要求）
           zipalign -f 4 m.apk f.apk
 
-      - name: 上传成品APK（纯英文名称，避免报错）
+      - name: 上传成品APK（纯英文名称，无编码错误）
         uses: actions/upload-artifact@v4
         with:
           name: patched-renamed-apk
           path: f.apk
+          retention-days: 90  # 保留90天，方便下载
