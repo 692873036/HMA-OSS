@@ -53,8 +53,9 @@ fun getUncommittedSuffix(): String {
     return "$returnedVal-dirty+${result.count { it == '\n' } + 1}"
 }
 
-val gitHasUncommittedSuffix = getUncommittedSuffix()
-val gitCommitCount = "git rev-list refs/remotes/origin/master --count".execute().toInt()
+// CI环境跳过所有git命令，直接使用默认值（核心修改）
+val gitHasUncommittedSuffix = if (ciBuild) "-ci" else getUncommittedSuffix()
+val gitCommitCount = if (ciBuild) 1000 else "git rev-list refs/remotes/origin/master --count".execute().toInt()
 
 // 432 is the count of commits before license changed
 val gitCommitCountAfterOss = gitCommitCount - 432
